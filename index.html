@@ -3,56 +3,62 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Pelea VR - Manos y Pasos</title>
+<title>Pelea VR - Tu Brazo Real en 3D</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <style>
-  body{margin:0;overflow:hidden;background:black;font-family:sans-serif}
-  /* Cámara ESCONDIDA - solo detecta, no se ve */
-  #camPreview{position:fixed;bottom:10px;right:10px;width:1px;height:1px;opacity:0;pointer-events:none;z-index:1}
+  body{margin:0;overflow:hidden;background:#87CEEB;font-family:sans-serif}
+  #camPreview{position:fixed;width:1px;height:1px;opacity:0;pointer-events:none}
   #damage{position:fixed;inset:0;pointer-events:none;z-index:10;box-shadow:inset 0 0 130px 70px rgba(255,0,0,.95);opacity:0;transition:opacity .25s}
-  #hud{position:fixed;top:8px;left:10px;right:10px;z-index:20;color:white;text-shadow:1px 1px 3px black;pointer-events:none}
+  #hud{position:fixed;top:8px;left:10px;right:10px;z-index:20;color:white;text-shadow:2px 2px 4px black;pointer-events:none}
   .bar{height:16px;background:#222;border:2px solid white;border-radius:10px;overflow:hidden;margin-bottom:4px}
   #myHealth{height:100%;width:100%;background:lime}
   #enemyHealth{height:100%;width:100%;background:red}
-  #msg{position:fixed;top:90px;left:0;right:0;text-align:center;color:white;z-index:20;text-shadow:1px 1px 4px black;font-size:18px}
+  #msg{position:fixed;top:90px;left:0;right:0;text-align:center;color:white;z-index:30;text-shadow:1px 1px 4px black;font-size:18px;background:rgba(0,0,0,.4);padding:8px}
   #startBtn{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:18px 34px;font-size:22px;border-radius:15px;border:none;background:#ffcc00;z-index:40;font-weight:bold}
   #perm{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 20px;background:white;border-radius:12px;z-index:40;font-weight:bold}
-  #stepInfo{position:fixed;bottom:10px;left:10px;color:white;z-index:20;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:10px;font-size:14px}
+  #stepInfo{position:fixed;bottom:10px;left:10px;color:white;z-index:30;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:10px;font-size:14px}
   #hitFlash{position:fixed;inset:0;background:rgba(255,255,0,.35);z-index:35;pointer-events:none;opacity:0;transition:opacity .15s}
+  /* TU BRAZO REAL RECORTADO, PEGADO ARRIBA DEL 3D */
+  #armCut{position:fixed;width:320px;height:420px;z-index:25;pointer-events:none;display:none;transform:translate(-50%,-50%);object-fit:cover;filter:drop-shadow(0 0 10px rgba(0,0,0,.5))}
+  #armLabel{position:fixed;color:white;background:rgba(0,0,0,.5);padding:4px 10px;border-radius:10px;z-index:26;display:none;font-weight:bold;transform:translateX(-50%)}
+  #joy{position:fixed;bottom:70px;right:15px;width:110px;height:110px;background:rgba(255,255,255,.25);border:2px solid white;border-radius:50%;z-index:30;display:none}
+  #joyKnob{position:absolute;left:35px;top:35px;width:40px;height:40px;background:white;border-radius:50%}
 </style>
 </head>
 <body>
 <video id="camPreview" autoplay playsinline muted></video>
+<canvas id="armCanvas" width="300" height="400" style="display:none"></canvas>
+<img id="armCut">
+<div id="armLabel">TU BRAZO</div>
 <div id="hitFlash"></div>
 <div id="damage"></div>
 <div id="hud">
   <div>YO ❤️ <span id="myTxt">100</span></div><div class="bar"><div id="myHealth"></div></div>
   <div>RIVAL IA 👹 <span id="enTxt">100</span> - <span id="stateTxt">esperando</span></div><div class="bar"><div id="enemyHealth"></div></div>
 </div>
-<div id="msg">1- Tocá PERMITIR<br>2- Tu puño va a aparecer en 3D en la batalla<br>3- Tocá EMPEZAR y pegale</div>
+<div id="msg">Campo 3D + TU BRAZO REAL<br>1- Tocá PERMITIR - 2- Tocá EMPEZAR<br>3- Caminá para moverte por el campo</div>
 <button id="startBtn">▶ EMPEZAR PELEA</button>
 <button id="perm">📷 PERMITIR CÁMARA DE ATRÁS</button>
-<div id="stepInfo">Pasos: 0 | Mano: no detectada</div>
-<a-scene>
+<div id="stepInfo">Pasos: 0 | Brazo: no detectado</div>
+<div id="joy"><div id="joyKnob"></div></div>
+<a-scene background="color: #87CEEB">
   <a-sky color="#87CEEB"></a-sky>
-  <a-plane position="0 0 0" rotation="-90 0 0" width="50" height="50" color="#7BC8A4"></a-plane>
-  <a-ring position="0 0.01 0" rotation="-90 0 0" radius-inner="2.8" radius-outer="3.1" color="white"></a-ring>
-  <a-box position="3 0.5 3" width="0.5" height="1" depth="0.5" color="#8B4513"></a-box>
-  <a-box position="-3 0.5 -3" width="0.5" height="1" depth="0.5" color="#8B4513"></a-box>
-
-  <a-entity id="player" position="0 1.6 7"><a-camera look-controls="pointerLockEnabled:false"><a-cursor color="yellow"></a-cursor></a-camera></a-entity>
-
-  <!-- TU PUÑO EN 3D - GUANTE VIRTUAL -->
-  <a-entity id="myFist" position="0 1.4 4.5" visible="false">
-    <a-sphere position="0 0 0" radius="0.32" color="#e74c3c"></a-sphere>
-    <a-box position="0 -0.05 -0.25" width="0.22" height="0.22" depth="0.35" color="#c0392b"></a-box>
-    <a-sphere position="0.12 0.15 0.22" radius="0.07" color="white"></a-sphere>
-    <a-sphere position="-0.12 0.15 0.22" radius="0.07" color="white"></a-sphere>
-    <a-box position="0 0.32 -0.05" width="0.45" height="0.12" depth="0.12" color="#f1c27d"></a-box>
-  </a-entity>
-
-  <a-entity id="enemy" position="0 1.25 -1">
+  <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#4CAF50"></a-plane>
+  <a-ring position="0 0.02 0" rotation="-90 0 0" radius-inner="3.8" radius-outer="4.2" color="white"></a-ring>
+  <a-ring position="0 0.02 0" rotation="-90 0 0" radius-inner="2.8" radius-outer="3.0" color="#FFD700"></a-ring>
+  <a-box position="4 1 4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
+  <a-box position="-4 1 4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
+  <a-box position="4 1 -4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
+  <a-box position="-4 1 -4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
+  <a-cylinder position="8 1 -6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
+  <a-sphere position="8 3 -6" radius="1.5" color="#228B22"></a-sphere>
+  <a-cylinder position="-8 1 -6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
+  <a-sphere position="-8 3 -6" radius="1.5" color="#228B22"></a-sphere>
+  <a-cylinder position="10 1 6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
+  <a-sphere position="10 3 6" radius="1.5" color="#228B22"></a-sphere>
+  <a-entity id="player" position="0 1.6 8" rotation="0 0 0"><a-camera look-controls="enabled:false"></a-camera></a-entity>
+  <a-entity id="enemy" position="0 1.25 0">
     <a-box position="0 0 0" width="1.05" height="1.5" depth="0.6" color="#c0392b" id="body"></a-box>
     <a-box position="0 1.05 0" width="0.62" height="0.62" depth="0.62" color="#f1c27d"></a-box>
     <a-box position="-0.15 1.1 0.32" width="0.12" height="0.12" depth="0.05" color="black"></a-box>
@@ -64,47 +70,59 @@
 <script>
 let started=false, myHP=100, enemyHP=100, steps=0;
 let lastEnemyAttack=0, enemyCooldownUntil=0, nextThink=0, enemyMode="chase", strafeDir=1, strafeUntil=0;
-let lastStepTime=0, lastAccel=0, handHistory=[], lastPunchTime=0, fistZ=4.5, fistTargetZ=4.5;
-const player=document.querySelector("#player"), enemy=document.querySelector("#enemy"), myFist=document.querySelector("#myFist");
+let lastStepTime=0, lastAccel=0, handHistory=[], lastPunchTime=0;
+let joyActive=false, joyDX=0, joyDY=0;
+const player=document.querySelector("#player"), enemy=document.querySelector("#enemy");
 const damageEl=document.querySelector("#damage"), msgEl=document.querySelector("#msg");
-const stepInfo=document.querySelector("#stepInfo");
+const stepInfo=document.querySelector("#stepInfo"), armCut=document.querySelector("#armCut"), armLabel=document.querySelector("#armLabel");
+const armCanvas=document.querySelector("#armCanvas"), armCtx=armCanvas.getContext("2d");
 document.querySelector("#perm").addEventListener("click", async ()=>{
   if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){ try{ await DeviceMotionEvent.requestPermission(); }catch(e){} }
   startHandTracking();
   document.querySelector("#perm").style.display="none";
-  msgEl.textContent="Cámara oculta prendida. Solo detecta tu mano.";
+  msgEl.textContent="Cámara oculta. Solo recorta tu brazo real.";
 });
-document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; myFist.setAttribute("visible","true"); msgEl.textContent="¡Mirá tu guante 3D! Movelo con tu mano y pegale."; });
+document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; document.querySelector("#joy").style.display="block"; msgEl.textContent="¡Mové tu brazo real! Caminá para moverte por el campo."; });
+// JOYSTICK PARA MOVERTE POR TODO EL ESPACIO
+const joy=document.querySelector("#joy"), knob=document.querySelector("#joyKnob");
+joy.addEventListener("touchstart", e=>{ joyActive=true; }, {passive:true});
+joy.addEventListener("touchmove", e=>{ let r=joy.getBoundingClientRect(); let t=e.touches[0]; joyDX=(t.clientX-(r.left+r.width/2))/55; joyDY=(t.clientY-(r.top+r.height/2))/55; joyDX=Math.max(-1,Math.min(1,joyDX)); joyDY=Math.max(-1,Math.min(1,joyDY)); knob.style.left=(35+joyDX*25)+"px"; knob.style.top=(35+joyDY*25)+"px"; }, {passive:true});
+joy.addEventListener("touchend", ()=>{ joyActive=false; joyDX=0; joyDY=0; knob.style.left="35px"; knob.style.top="35px"; });
+// PASOS TAMBIÉN MUEVEN
 window.addEventListener("devicemotion", (e)=>{
   if(!started) return; let acc=e.accelerationIncludingGravity; if(!acc) return;
   let total=Math.sqrt(acc.x*acc.x+acc.y*acc.y+acc.z*acc.z); let now=Date.now();
   if(Math.abs(total-lastAccel)>4 && now-lastStepTime>450){
-    lastStepTime=now; steps++; stepInfo.textContent=`Pasos: ${steps} | Mano: ${handHistory.length>0?"detectada":"no detectada"}`;
-    let cam=document.querySelector("a-camera").getAttribute("rotation"); let rad=(cam.y||0)*Math.PI/180;
-    let fx=-Math.sin(rad), fz=-Math.cos(rad); let p=player.getAttribute("position");
-    p.x+=fx*0.7; p.z+=fz*0.7; p.x=Math.max(-9,Math.min(9,p.x)); p.z=Math.max(-9,Math.min(9,p.z));
-    player.setAttribute("position",p);
+    lastStepTime=now; steps++; stepInfo.textContent=`Pasos: ${steps} | Brazo: ${handHistory.length>0?"detectado":"no detectado"}`;
+    movePlayer(0, -0.9);
   } lastAccel=total;
 });
+function movePlayer(dx, dz){
+  let p=player.getAttribute("position"); p.x+=dx; p.z+=dz; p.x=Math.max(-15,Math.min(15,p.x)); p.z=Math.max(-15,Math.min(15,p.z)); player.setAttribute("position",p);
+}
+setInterval(()=>{ if(started && joyActive){ movePlayer(joyDX*0.15, joyDY*0.15); } }, 50);
 async function startHandTracking(){
   const video=document.querySelector("#camPreview");
   const hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
   hands.setOptions({maxNumHands:1, modelComplexity:0, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
   hands.onResults((res)=>{
-    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ handHistory=[]; return; }
+    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ armCut.style.display="none"; armLabel.style.display="none"; handHistory=[]; return; }
     let lm=res.multiHandLandmarks[0]; let wrist=lm[0]; let now=Date.now();
-    // TU MANO REAL -> GUANTE 3D EN EL CAMPO DE BATALLA
-    // x de la cámara (0 a 1) -> x en el mundo (-1.5 a 1.5)
-    // y de la cámara (0 a 1) -> altura en el mundo (0.8 a 2.2)
-    let worldX = (0.5 - wrist.x) * 3;
-    let worldY = 2.3 - (wrist.y * 1.6);
-    worldY = Math.max(0.7, Math.min(2.4, worldY));
-    // El guante va adelante de tu jugador
-    let p = player.getAttribute("position");
-    myFist.setAttribute("position", {x: p.x + worldX*0.6, y: worldY, z: p.z - 2.5 + fistZ*0});
-    // Guardar para animar el golpe
-    myFist.setAttribute("data-x", worldX);
-    stepInfo.textContent=`Pasos: ${steps} | Mano: detectada - Guante 3D activo`;
+    // RECORTAR TU BRAZO REAL - recorte GRANDE para que se vea brazo + puño
+    try{
+      let vx=wrist.x*video.videoWidth, vy=wrist.y*video.videoHeight;
+      // Recorte alto para agarrar brazo entero
+      let sw=300, sh=420;
+      let sx=Math.max(0, vx-sw/2), sy=Math.max(0, vy-sh*0.65);
+      armCtx.clearRect(0,0,300,400);
+      armCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 300, 400);
+      armCut.src=armCanvas.toDataURL();
+    }catch(e){}
+    armCut.style.display="block"; armLabel.style.display="block";
+    // TU BRAZO REAL SIGUE A TU MANO EN LA PANTALLA
+    armCut.style.left=(wrist.x*100)+"%"; armCut.style.top=(wrist.y*100)+"%";
+    armLabel.style.left=(wrist.x*100)+"%"; armLabel.style.top=(wrist.y*100+22)+"%";
+    stepInfo.textContent=`Pasos: ${steps} | Brazo: detectado`;
     handHistory.push({x:wrist.x, y:wrist.y, t:now});
     if(handHistory.length>8) handHistory.shift();
     if(handHistory.length>=3){
@@ -121,14 +139,14 @@ async function startHandTracking(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
     video.srcObject = stream; await video.play();
-    msgEl.textContent="Listo. Tu guante 3D está listo. Tocá EMPEZAR.";
+    msgEl.textContent="Listo. Vas a ver tu brazo real en el campo 3D. Tocá EMPEZAR.";
     async function loopSend(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loopSend); }
     loopSend();
   }catch(e){
     try{
       const stream2 = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       video.srcObject = stream2; await video.play();
-      msgEl.textContent="Listo. Tu guante 3D está listo. Tocá EMPEZAR.";
+      msgEl.textContent="Listo. Vas a ver tu brazo real en el campo 3D. Tocá EMPEZAR.";
       async function loop2(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loop2); }
       loop2();
     }catch(e2){ msgEl.textContent="No pude prender la cámara: "+e2.message; }
@@ -139,31 +157,17 @@ function doMyPunch(type){
   let dmg= type==="jab"?15 : type==="hook"?22 : 30;
   enemyHP=Math.max(0,enemyHP-dmg);
   document.querySelector("#enemyHealth").style.width=enemyHP+"%"; document.querySelector("#enTxt").textContent=enemyHP;
-  // ANIMACIÓN: EL GUANTE 3D SALE VOLANDO HACIA EL RIVAL
-  let p=player.getAttribute("position"), e=enemy.getAttribute("position");
-  let startPos = myFist.getAttribute("position");
-  let targetPos = {x: e.x, y: e.y+0.3, z: e.z+0.8};
-  let t=0;
-  let anim=setInterval(()=>{
-    t+=30;
-    let prog=t/300;
-    if(prog>=1){ clearInterval(anim); myFist.setAttribute("position", startPos); return; }
-    let nx = startPos.x + (targetPos.x - startPos.x)*prog;
-    let ny = startPos.y + (targetPos.y - startPos.y)*prog;
-    let nz = startPos.z + (targetPos.z - startPos.z)*prog;
-    myFist.setAttribute("position", {x:nx, y:ny, z:nz});
-    // El guante se agranda cuando pega
-    let s = 1 + prog*0.6;
-    myFist.setAttribute("scale", `${s} ${s} ${s}`);
-    if(prog>=1) myFist.setAttribute("scale","1 1 1");
-  },30);
+  // TU BRAZO REAL SE AGRANDA COMO SI PEGARA
+  armCut.style.width="380px"; armCut.style.height="500px";
+  setTimeout(()=>{ armCut.style.width="320px"; armCut.style.height="420px"; },180);
   let flash=document.querySelector("#hitFlash"); flash.style.opacity="1"; setTimeout(()=>flash.style.opacity="0",150);
-  msgEl.textContent = type==="jab"?"💥 ¡RECTO 3D! -"+dmg : type==="hook"?"💥 ¡GANCHO 3D! -"+dmg : "💥 ¡UPPERCUT 3D! -"+dmg;
+  msgEl.textContent = type==="jab"?"💥 ¡RECTO CON TU BRAZO! -"+dmg : type==="hook"?"💥 ¡GANCHO CON TU BRAZO! -"+dmg : "💥 ¡UPPERCUT CON TU BRAZO! -"+dmg;
+  let p=player.getAttribute("position"), e=enemy.getAttribute("position");
   let dx=e.x-p.x, dz=e.z-p.z, l=Math.hypot(dx,dz)||1;
   enemy.setAttribute("position",{x:e.x+dx/l*0.5, y:e.y, z:e.z+dz/l*0.5});
   document.querySelector("#body").setAttribute("color","white");
   setTimeout(()=>document.querySelector("#body").setAttribute("color","#c0392b"),150);
-  if(enemyHP<=0){ msgEl.textContent="🏆 ¡GANASTE! ¡LO NOQUEASTE CON TU GUANTE 3D!"; enemy.setAttribute("visible","false"); }
+  if(enemyHP<=0){ msgEl.textContent="🏆 ¡GANASTE CON TU BRAZO REAL!"; enemy.setAttribute("visible","false"); }
 }
 function showRed(){ damageEl.style.opacity="1"; setTimeout(()=>damageEl.style.opacity="0.65",400); setTimeout(()=>damageEl.style.opacity="0",1400); }
 function enemyPunchAnim(type){
@@ -191,7 +195,7 @@ function loop(now){
   else if(enemyMode==="circle"){ let px=-dz/dist*strafeDir, pz=dx/dist*strafeDir; mx=px*0.8+dx/dist*0.4; mz=pz*0.8+dz/dist*0.4; speed=1.2; if(now>strafeUntil) strafeDir*=-1; }
   else if(enemyMode==="attack"){ speed=0.4; mx=dx/dist*0.3; mz=dz/dist*0.3; }
   if(dist<1.1){ mx=0; mz=0; speed=0; }
-  e.x+=mx*speed*dt; e.z+=mz*speed*dt; e.x=Math.max(-9,Math.min(9,e.x)); e.z=Math.max(-9,Math.min(9,e.z));
+  e.x+=mx*speed*dt; e.z+=mz*speed*dt; e.x=Math.max(-15,Math.min(15,e.x)); e.z=Math.max(-15,Math.min(15,e.z));
   let walkBob = speed>0.5 ? Math.sin(now*0.012)*0.04 : 0; enemy.setAttribute("position",{x:e.x, y:1.25+walkBob, z:e.z});
   if(dist<1.9 && now>enemyCooldownUntil && now-lastEnemyAttack>1800){
     lastEnemyAttack=now; enemyCooldownUntil=now+400;
