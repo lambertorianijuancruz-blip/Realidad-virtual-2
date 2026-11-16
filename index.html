@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Pelea VR - Casco con Cuerpo</title>
+<title>Pelea VR - Nunca pierdas al rival</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <style>
@@ -14,13 +14,18 @@
   .bar{height:16px;background:#222;border:2px solid white;border-radius:10px;overflow:hidden;margin-bottom:4px}
   #myHealth{height:100%;width:100%;background:lime}
   #enemyHealth{height:100%;width:100%;background:red}
-  #msg{position:fixed;top:90px;left:0;right:0;text-align:center;color:white;z-index:30;text-shadow:1px 1px 4px black;font-size:18px;background:rgba(0,0,0,.4);padding:8px}
+  #msg{position:fixed;top:90px;left:0;right:0;text-align:center;color:white;z-index:30;text-shadow:1px 1px 4px black;font-size:17px;background:rgba(0,0,0,.4);padding:8px}
   #startBtn{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:18px 34px;font-size:22px;border-radius:15px;border:none;background:#ffcc00;z-index:40;font-weight:bold}
   #perm{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 20px;background:white;border-radius:12px;z-index:40;font-weight:bold}
   #stepInfo{position:fixed;bottom:10px;left:10px;color:white;z-index:30;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:10px;font-size:14px}
   #hitFlash{position:fixed;inset:0;background:rgba(255,255,0,.35);z-index:35;pointer-events:none;opacity:0;transition:opacity .15s}
   #armCut{position:fixed;width:320px;height:420px;z-index:25;pointer-events:none;display:none;transform:translate(-50%,-50%);object-fit:cover}
-  #calib{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);padding:12px 20px;background:#00c853;color:white;border:none;border-radius:12px;z-index:40;font-weight:bold;display:none}
+  /* FLECHA QUE SIEMPRE APUNTA AL RIVAL */
+  #arrowBox{position:fixed;top:140px;left:50%;transform:translateX(-50%);z-index:30;text-align:center;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:20px;color:white;display:none}
+  #arrow{font-size:42px;display:block;transition:transform .1s}
+  #distTxt{font-size:14px}
+  #findBtn{position:fixed;bottom:75px;left:50%;transform:translateX(-50%);padding:16px 26px;background:#ff4444;color:white;border:none;border-radius:15px;z-index:40;font-weight:bold;font-size:18px;display:none;box-shadow:0 0 20px red}
+  #calib{position:fixed;bottom:145px;left:50%;transform:translateX(-50%);padding:12px 20px;background:#00c853;color:white;border:none;border-radius:12px;z-index:40;font-weight:bold;display:none}
 </style>
 </head>
 <body>
@@ -33,24 +38,29 @@
   <div>YO ❤️ <span id="myTxt">100</span></div><div class="bar"><div id="myHealth"></div></div>
   <div>RIVAL IA 👹 <span id="enTxt">100</span> - <span id="stateTxt">esperando</span></div><div class="bar"><div id="enemyHealth"></div></div>
 </div>
-<div id="msg">PONÉ EL CELU EN EL CASCO A LA ALTURA DE LOS OJOS<br>1- Tocá PERMITIR - 2- Tocá EMPEZAR<br>3- Ponete el casco y movete con el cuerpo</div>
+<div id="msg">PONÉ EL CELU EN EL CASCO<br>1- PERMITIR - 2- EMPEZAR<br>Si lo perdés, seguí la flecha ⬆️</div>
+<div id="arrowBox"><span id="arrow">⬆️</span><div id="distTxt">Rival a 5m</div><div style="font-size:12px">Seguí la flecha</div></div>
+<button id="findBtn">🎯 ¡PERDÍ AL RIVAL! GIRAR PARA VERLO</button>
 <button id="startBtn">▶ EMPEZAR PELEA</button>
 <button id="perm">📷 PERMITIR SENSORES + CÁMARA</button>
-<button id="calib">🎯 CENTRAR VISTA - MIRÁ AL RIVAL Y TOCÁ ACÁ</button>
-<div id="stepInfo">Pasos: 0 | Cabeza: 0° | Brazo: no detectado</div>
+<button id="calib">🎯 CENTRAR VISTA</button>
+<div id="stepInfo">Pasos: 0 | Cabeza: 0°</div>
 <a-scene background="color: #87CEEB">
   <a-sky color="#87CEEB"></a-sky>
-  <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#4CAF50"></a-plane>
-  <a-ring position="0 0.02 0" rotation="-90 0 0" radius-inner="3.8" radius-outer="4.2" color="white"></a-ring>
-  <a-ring position="0 0.02 0" rotation="-90 0 0" radius-inner="2.8" radius-outer="3.0" color="#FFD700"></a-ring>
-  <a-box position="4 1 4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
-  <a-box position="-4 1 4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
-  <a-box position="4 1 -4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
-  <a-box position="-4 1 -4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
-  <a-cylinder position="8 1 -6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
-  <a-sphere position="8 3 -6" radius="1.5" color="#228B22"></a-sphere>
-  <a-cylinder position="-8 1 -6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
-  <a-sphere position="-8 3 -6" radius="1.5" color="#228B22"></a-sphere>
+  <a-plane id="ground" position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#4CAF50"></a-plane>
+  <!-- RING QUE TE SIGUE - NUNCA QUEDÁS EN PASTO INFINITO -->
+  <a-entity id="ringGroup" position="0 0 0">
+    <a-ring position="0 0.02 0" rotation="-90 0 0" radius-inner="3.8" radius-outer="4.2" color="white"></a-ring>
+    <a-ring position="0 0.02 0" rotation="-90 0 0" radius-inner="2.8" radius-outer="3.0" color="#FFD700"></a-ring>
+    <a-box position="4 1 4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
+    <a-box position="-4 1 4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
+    <a-box position="4 1 -4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
+    <a-box position="-4 1 -4" width="0.4" height="2" depth="0.4" color="#8B4513"></a-box>
+    <a-cylinder position="8 1 -6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
+    <a-sphere position="8 3 -6" radius="1.5" color="#228B22"></a-sphere>
+    <a-cylinder position="-8 1 -6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
+    <a-sphere position="-8 3 -6" radius="1.5" color="#228B22"></a-sphere>
+  </a-entity>
   <a-entity id="player" position="0 1.6 8" rotation="0 0 0"><a-camera look-controls="enabled:false"></a-camera></a-entity>
   <a-entity id="enemy" position="0 1.25 0">
     <a-box position="0 0 0" width="1.05" height="1.5" depth="0.6" color="#c0392b" id="body"></a-box>
@@ -59,19 +69,21 @@
     <a-box position="0.15 1.1 0.32" width="0.12" height="0.12" depth="0.05" color="black"></a-box>
     <a-box id="armL" position="-0.7 0.2 0.2" width="0.28" height="1.05" depth="0.28" color="#c0392b"></a-box>
     <a-box id="armR" position="0.7 0.2 0.2" width="0.28" height="1.05" depth="0.28" color="#c0392b"></a-box>
+    <!-- MARCA GIGANTE ARRIBA DEL RIVAL PARA VERLO DE LEJOS -->
+    <a-cone position="0 3.2 0" rotation="180 0 0" radius-bottom="0.5" height="1" color="yellow"></a-cone>
+    <a-cylinder position="0 4 0" radius="0.05" height="2" color="yellow"></a-cylinder>
   </a-entity>
 </a-scene>
 <script>
 let started=false, myHP=100, enemyHP=100, steps=0;
 let lastEnemyAttack=0, enemyCooldownUntil=0, nextThink=0, enemyMode="chase", strafeDir=1, strafeUntil=0;
 let lastStepTime=0, lastAccel=0, handHistory=[], lastPunchTime=0;
-let headYaw=0, headPitch=0, yawOffset=0, lastOrientation=null;
-const player=document.querySelector("#player"), enemy=document.querySelector("#enemy");
+let headYaw=0, headPitch=0, yawOffset=0;
+const player=document.querySelector("#player"), enemy=document.querySelector("#enemy"), ringGroup=document.querySelector("#ringGroup");
 const damageEl=document.querySelector("#damage"), msgEl=document.querySelector("#msg");
-const stepInfo=document.querySelector("#stepInfo"), armCut=document.querySelector("#armCut");
+const stepInfo=document.querySelector("#stepInfo"), armCut=document.querySelector("#armCut"), arrowEl=document.querySelector("#arrow"), distTxt=document.querySelector("#distTxt");
 const armCanvas=document.querySelector("#armCanvas"), armCtx=armCanvas.getContext("2d");
 document.querySelector("#perm").addEventListener("click", async ()=>{
-  // Pedir permiso para sensores del casco
   if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){ try{ await DeviceMotionEvent.requestPermission(); }catch(e){} }
   if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){ try{ await DeviceOrientationEvent.requestPermission(); }catch(e){} }
   startHandTracking();
@@ -79,47 +91,61 @@ document.querySelector("#perm").addEventListener("click", async ()=>{
   document.querySelector("#calib").style.display="block";
   msgEl.textContent="Sensores prendidos. Ponete el casco, mirá al rival y tocá CENTRAR VISTA.";
 });
-document.querySelector("#calib").addEventListener("click", ()=>{
-  // Centrar la vista donde estás mirando ahora
-  yawOffset = headYaw;
-  document.querySelector("#calib").style.display="none";
-  msgEl.textContent="Vista centrada. Ahora movete con el cuerpo.";
+document.querySelector("#calib").addEventListener("click", ()=>{ yawOffset=headYaw; document.querySelector("#calib").style.display="none"; msgEl.textContent="Vista centrada. Si lo perdés, seguí la flecha o tocá el botón rojo."; });
+document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; document.querySelector("#arrowBox").style.display="block"; document.querySelector("#findBtn").style.display="block"; msgEl.textContent="¡Con el casco! Si lo perdés, seguí la flecha."; });
+// BOTÓN PARA ENCONTRARLO AL INSTANTE
+document.querySelector("#findBtn").addEventListener("click", ()=>{
+  let p=player.getAttribute("position"), e=enemy.getAttribute("position");
+  let dx=e.x-p.x, dz=e.z-p.z;
+  let targetYaw = Math.atan2(-dx, -dz)*180/Math.PI;
+  // Girar la vista automáticamente hacia el rival
+  yawOffset = headYaw - (-targetYaw);
+  player.setAttribute("rotation", {x:0, y:targetYaw, z:0});
+  msgEl.textContent="¡Ahí está! Te giré para que lo veas.";
 });
-document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; msgEl.textContent="¡Con el casco puesto! Mové la cabeza para mirar, caminá para moverte."; });
-// === TU CABEZA MUEVE LA CÁMARA ===
 window.addEventListener("deviceorientation", (e)=>{
-  if(e.alpha===null) return;
-  // alpha = a donde mirás con la cabeza (brújula), beta = arriba/abajo
-  headYaw = e.alpha || 0;
-  headPitch = e.beta || 0;
+  if(e.alpha===null) return; headYaw=e.alpha||0; headPitch=e.beta||0;
   if(!started) return;
   let yaw = headYaw - yawOffset;
-  // Aplicar rotación a tu jugador según tu cabeza
-  // Invertido porque el celu está en el casco mirando para adelante
+  // LIMITAR CUANTO PODÉS GIRAR LA CABEZA PARA NO PERDERTE - max 90° para cada lado
+  // Si girás más, no te deja perderte del todo
   let camYaw = -yaw;
-  // Pitch: cuando mirás para abajo/arriba
-  let pitch = Math.max(-30, Math.min(30, (headPitch-90)*0.5));
-  player.setAttribute("rotation", {x: pitch, y: camYaw, z: 0});
-  stepInfo.textContent=`Pasos: ${steps} | Cabeza: ${Math.round(camYaw)}° | Brazo: ${handHistory.length>0?"detectado":"no detectado"}`;
+  // Normalizar a -180 a 180
+  while(camYaw>180) camYaw-=360; while(camYaw<-180) camYaw+=360;
+  // Suavizar: no dejar que gire de golpe más de 120°
+  if(camYaw>120) camYaw=120; if(camYaw<-120) camYaw=-120;
+  let pitch = Math.max(-20, Math.min(20, (headPitch-90)*0.4));
+  player.setAttribute("rotation", {x:pitch, y:camYaw, z:0});
 });
-// === TUS PIES MUEVEN TU CUERPO EN EL JUEGO ===
 window.addEventListener("devicemotion", (e)=>{
   if(!started) return; let acc=e.accelerationIncludingGravity; if(!acc) return;
   let total=Math.sqrt(acc.x*acc.x+acc.y*acc.y+acc.z*acc.z); let now=Date.now();
-  // Cada paso que das con tus pies = un paso en el juego
   if(Math.abs(total-lastAccel)>3.5 && now-lastStepTime>400){
     lastStepTime=now; steps++;
-    // Caminás para donde estás MIRANDO con la cabeza
     let yawRad = (player.getAttribute("rotation").y || 0) * Math.PI/180;
-    // Si el celu está en el casco, adelante es -Z
-    let fx = -Math.sin(yawRad), fz = -Math.cos(yawRad);
-    let p=player.getAttribute("position");
-    p.x += fx*0.8; p.z += fz*0.8;
+    let fx=-Math.sin(yawRad), fz=-Math.cos(yawRad);
+    let p=player.getAttribute("position"); p.x+=fx*0.8; p.z+=fz*0.8;
     p.x=Math.max(-15,Math.min(15,p.x)); p.z=Math.max(-15,Math.min(15,p.z));
     player.setAttribute("position",p);
-    msgEl.textContent="👟 Paso con tu cuerpo! Pasos: "+steps;
   } lastAccel=total;
 });
+// FLECHA QUE APUNTA AL RIVAL + RING QUE TE SIGUE
+setInterval(()=>{
+  if(!started) return;
+  let p=player.getAttribute("position"), e=enemy.getAttribute("position");
+  let dx=e.x-p.x, dz=e.z-p.z; let dist=Math.hypot(dx,dz);
+  let angleToEnemy = Math.atan2(dx, dz)*180/Math.PI;
+  let myYaw = player.getAttribute("rotation").y || 0;
+  // Cuánto tenés que girar para verlo
+  let diff = angleToEnemy - myYaw;
+  while(diff>180) diff-=360; while(diff<-180) diff+=360;
+  arrowEl.style.transform=`rotate(${diff}deg)`;
+  distTxt.textContent=`Rival a ${dist.toFixed(1)}m ${Math.abs(diff)<20?"¡AHÍ ADELANTE!":"Girá "+Math.round(diff)+"°"}`;
+  if(Math.abs(diff)<20){ arrowEl.textContent="🎯"; } else if(diff>0){ arrowEl.textContent="➡️"; } else { arrowEl.textContent="⬅️"; }
+  // El ring te sigue para que nunca quedes en pasto infinito
+  ringGroup.setAttribute("position", {x:p.x, y:0, z:p.z});
+  stepInfo.textContent=`Pasos: ${steps} | Rival: ${dist.toFixed(1)}m`;
+}, 200);
 async function startHandTracking(){
   const video=document.querySelector("#camPreview");
   const hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
@@ -127,78 +153,38 @@ async function startHandTracking(){
   hands.onResults((res)=>{
     if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ armCut.style.display="none"; handHistory=[]; return; }
     let lm=res.multiHandLandmarks[0]; let wrist=lm[0]; let now=Date.now();
-    try{
-      let vx=wrist.x*video.videoWidth, vy=wrist.y*video.videoHeight;
-      let sw=300, sh=420; let sx=Math.max(0, vx-sw/2), sy=Math.max(0, vy-sh*0.65);
-      armCtx.clearRect(0,0,300,400); armCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 300, 400);
-      armCut.src=armCanvas.toDataURL();
-    }catch(e){}
+    try{ let vx=wrist.x*video.videoWidth, vy=wrist.y*video.videoHeight; let sw=300, sh=420; let sx=Math.max(0, vx-sw/2), sy=Math.max(0, vy-sh*0.65); armCtx.clearRect(0,0,300,400); armCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 300, 400); armCut.src=armCanvas.toDataURL(); }catch(e){}
     armCut.style.display="block"; armCut.style.left=(wrist.x*100)+"%"; armCut.style.top=(wrist.y*100)+"%";
     handHistory.push({x:wrist.x, y:wrist.y, t:now});
     if(handHistory.length>8) handHistory.shift();
     if(handHistory.length>=3){
       let first=handHistory[0], last=handHistory[handHistory.length-1]; let dt=(last.t-first.t)/1000;
-      if(dt>0 && dt<0.5){
-        let vx=(last.x-first.x)/dt, vy=(last.y-first.y)/dt; let speed=Math.sqrt(vx*vx+vy*vy);
-        if(speed>1.0 && now-lastPunchTime>400){
-          lastPunchTime=now; let type="jab"; if(vy<-1.0) type="upper"; else if(Math.abs(vx)>1.0) type="hook"; else type="jab";
-          doMyPunch(type); handHistory=[];
-        }
-      }
+      if(dt>0 && dt<0.5){ let vx=(last.x-first.x)/dt, vy=(last.y-first.y)/dt; let speed=Math.sqrt(vx*vx+vy*vy);
+        if(speed>1.0 && now-lastPunchTime>400){ lastPunchTime=now; let type="jab"; if(vy<-1.0) type="upper"; else if(Math.abs(vx)>1.0) type="hook"; else type="jab"; doMyPunch(type); handHistory=[]; } }
     }
   });
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
-    video.srcObject = stream; await video.play();
-    msgEl.textContent="Listo. Ponete el casco y tocá EMPEZAR.";
-    async function loopSend(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loopSend); }
-    loopSend();
-  }catch(e){
-    try{
-      const stream2 = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-      video.srcObject = stream2; await video.play();
-      msgEl.textContent="Listo. Ponete el casco y tocá EMPEZAR.";
-      async function loop2(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loop2); }
-      loop2();
-    }catch(e2){ msgEl.textContent="No pude prender la cámara: "+e2.message; }
-  }
+  try{ const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false }); video.srcObject = stream; await video.play(); msgEl.textContent="Listo. Ponete el casco y tocá EMPEZAR."; async function loopSend(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loopSend); } loopSend();
+  }catch(e){ try{ const stream2 = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }); video.srcObject = stream2; await video.play(); msgEl.textContent="Listo. Ponete el casco y tocá EMPEZAR."; async function loop2(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loop2); } loop2(); }catch(e2){ msgEl.textContent="No pude prender la cámara: "+e2.message; } }
 }
 function doMyPunch(type){
-  if(!started || enemyHP<=0) return;
-  let dmg= type==="jab"?15 : type==="hook"?22 : 30;
-  enemyHP=Math.max(0,enemyHP-dmg);
+  if(!started || enemyHP<=0) return; let dmg= type==="jab"?15 : type==="hook"?22 : 30; enemyHP=Math.max(0,enemyHP-dmg);
   document.querySelector("#enemyHealth").style.width=enemyHP+"%"; document.querySelector("#enTxt").textContent=enemyHP;
-  armCut.style.width="380px"; armCut.style.height="500px";
-  setTimeout(()=>{ armCut.style.width="320px"; armCut.style.height="420px"; },180);
+  armCut.style.width="380px"; armCut.style.height="500px"; setTimeout(()=>{ armCut.style.width="320px"; armCut.style.height="420px"; },180);
   let flash=document.querySelector("#hitFlash"); flash.style.opacity="1"; setTimeout(()=>flash.style.opacity="0",150);
   msgEl.textContent = type==="jab"?"💥 ¡RECTO CON TU BRAZO! -"+dmg : type==="hook"?"💥 ¡GANCHO CON TU BRAZO! -"+dmg : "💥 ¡UPPERCUT CON TU BRAZO! -"+dmg;
-  let p=player.getAttribute("position"), e=enemy.getAttribute("position");
-  let dx=e.x-p.x, dz=e.z-p.z, l=Math.hypot(dx,dz)||1;
+  let p=player.getAttribute("position"), e=enemy.getAttribute("position"); let dx=e.x-p.x, dz=e.z-p.z, l=Math.hypot(dx,dz)||1;
   enemy.setAttribute("position",{x:e.x+dx/l*0.5, y:e.y, z:e.z+dz/l*0.5});
-  document.querySelector("#body").setAttribute("color","white");
-  setTimeout(()=>document.querySelector("#body").setAttribute("color","#c0392b"),150);
-  if(enemyHP<=0){ msgEl.textContent="🏆 ¡GANASTE CON TU BRAZO REAL!"; enemy.setAttribute("visible","false"); }
+  document.querySelector("#body").setAttribute("color","white"); setTimeout(()=>document.querySelector("#body").setAttribute("color","#c0392b"),150);
+  if(enemyHP<=0){ msgEl.textContent="🏆 ¡GANASTE!"; enemy.setAttribute("visible","false"); }
 }
 function showRed(){ damageEl.style.opacity="1"; setTimeout(()=>damageEl.style.opacity="0.65",400); setTimeout(()=>damageEl.style.opacity="0",1400); }
-function enemyPunchAnim(type){
-  const armL=document.querySelector("#armL"), armR=document.querySelector("#armR");
-  armL.setAttribute("position","-0.7 0.2 0.2"); armR.setAttribute("position","0.7 0.2 0.2");
-  let t=0; let id=setInterval(()=>{ t+=30;
-    if(type==="jab") armR.setAttribute("position",`0.3 0.2 ${0.2+t*0.015}`);
-    else if(type==="hookL") armL.setAttribute("rotation",`0 ${-t*0.8} 0`);
-    else if(type==="hookR") armR.setAttribute("rotation",`0 ${t*0.8} 0`);
-    else if(type==="upper") armL.setAttribute("position",`-0.3 ${-0.2+t*0.012} ${0.2+t*0.012}`);
-    if(t>220){ clearInterval(id); armL.setAttribute("position","-0.7 0.2 0.2"); armR.setAttribute("position","0.7 0.2 0.2"); armL.setAttribute("rotation","0 0 0"); armR.setAttribute("rotation","0 0 0"); }
-  },30);
-}
+function enemyPunchAnim(type){ const armL=document.querySelector("#armL"), armR=document.querySelector("#armR"); armL.setAttribute("position","-0.7 0.2 0.2"); armR.setAttribute("position","0.7 0.2 0.2"); let t=0; let id=setInterval(()=>{ t+=30; if(type==="jab") armR.setAttribute("position",`0.3 0.2 ${0.2+t*0.015}`); else if(type==="hookL") armL.setAttribute("rotation",`0 ${-t*0.8} 0`); else if(type==="hookR") armR.setAttribute("rotation",`0 ${t*0.8} 0`); else if(type==="upper") armL.setAttribute("position",`-0.3 ${-0.2+t*0.012} ${0.2+t*0.012}`); if(t>220){ clearInterval(id); armL.setAttribute("position","-0.7 0.2 0.2"); armR.setAttribute("position","0.7 0.2 0.2"); armL.setAttribute("rotation","0 0 0"); armR.setAttribute("rotation","0 0 0"); } },30); }
 let lastTime=performance.now();
 function loop(now){
   requestAnimationFrame(loop); let dt=Math.min(0.05,(now-lastTime)/1000); lastTime=now;
   if(!started || enemyHP<=0 || myHP<=0) return;
-  let p=player.getAttribute("position"); let e=enemy.getAttribute("position");
-  let dx=p.x-e.x, dz=p.z-e.z; let dist=Math.hypot(dx,dz)||0.001;
-  let targetRot=Math.atan2(dx,dz)*180/Math.PI; let curRot=enemy.getAttribute("rotation").y||0;
-  let diff=((targetRot-curRot+540)%360)-180; enemy.setAttribute("rotation",{x:0,y:curRot+diff*Math.min(1,dt*8),z:0});
+  let p=player.getAttribute("position"); let e=enemy.getAttribute("position"); let dx=p.x-e.x, dz=p.z-e.z; let dist=Math.hypot(dx,dz)||0.001;
+  let targetRot=Math.atan2(dx,dz)*180/Math.PI; let curRot=enemy.getAttribute("rotation").y||0; let diff=((targetRot-curRot+540)%360)-180; enemy.setAttribute("rotation",{x:0,y:curRot+diff*Math.min(1,dt*8),z:0});
   if(now>nextThink){ nextThink=now+500; if(dist>2.2) enemyMode="chase"; else if(dist>1.4) enemyMode="circle"; else enemyMode="attack"; strafeDir=Math.random()<0.5?-1:1; strafeUntil=now+600+Math.random()*600; document.querySelector("#stateTxt").textContent = enemyMode==="chase"?"te persigue" : enemyMode==="circle"?"buscando hueco" : "atacando"; }
   let speed=0, mx=0, mz=0;
   if(enemyMode==="chase"){ speed=1.7; mx=dx/dist; mz=dz/dist; }
@@ -208,12 +194,8 @@ function loop(now){
   e.x+=mx*speed*dt; e.z+=mz*speed*dt; e.x=Math.max(-15,Math.min(15,e.x)); e.z=Math.max(-15,Math.min(15,e.z));
   let walkBob = speed>0.5 ? Math.sin(now*0.012)*0.04 : 0; enemy.setAttribute("position",{x:e.x, y:1.25+walkBob, z:e.z});
   if(dist<1.9 && now>enemyCooldownUntil && now-lastEnemyAttack>1800){
-    lastEnemyAttack=now; enemyCooldownUntil=now+400;
-    let moves=["jab","hookL","hookR","upper"]; let move=moves[Math.floor(Math.random()*moves.length)];
-    enemyPunchAnim(move);
-    setTimeout(()=>{ let pp=player.getAttribute("position"); let ee=enemy.getAttribute("position"); let d2=Math.hypot(pp.x-ee.x, pp.z-ee.z);
-      if(d2<2.4){ let dmg= move==="jab"?7 : move==="upper"?18 : 12; myHP=Math.max(0,myHP-dmg); document.querySelector("#myHealth").style.width=myHP+"%"; document.querySelector("#myTxt").textContent=myHP; showRed(); msgEl.textContent = move==="jab"?"Te metió un RECTO -"+dmg : move==="upper"?"Te metió un UPPERCUT -"+dmg : "Te metió un GANCHO -"+dmg; if(myHP<=0) msgEl.textContent="💀 TE GANÓ LA IA."; }
-    },250);
+    lastEnemyAttack=now; enemyCooldownUntil=now+400; let moves=["jab","hookL","hookR","upper"]; let move=moves[Math.floor(Math.random()*moves.length)]; enemyPunchAnim(move);
+    setTimeout(()=>{ let pp=player.getAttribute("position"); let ee=enemy.getAttribute("position"); let d2=Math.hypot(pp.x-ee.x, pp.z-ee.z); if(d2<2.4){ let dmg= move==="jab"?7 : move==="upper"?18 : 12; myHP=Math.max(0,myHP-dmg); document.querySelector("#myHealth").style.width=myHP+"%"; document.querySelector("#myTxt").textContent=myHP; showRed(); msgEl.textContent = move==="jab"?"Te metió un RECTO -"+dmg : move==="upper"?"Te metió un UPPERCUT -"+dmg : "Te metió un GANCHO -"+dmg; if(myHP<=0) msgEl.textContent="💀 TE GANÓ LA IA."; } },250);
   }
 }
 requestAnimationFrame(loop);
