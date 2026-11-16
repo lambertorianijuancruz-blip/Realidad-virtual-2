@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Pelea VR - Manos y Pasos</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<!-- MediaPipe para ver tus manos -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 <style>
@@ -24,26 +23,22 @@
 </style>
 </head>
 <body>
-
 <div id="damage"></div>
 <div id="hud">
   <div>YO ❤️ <span id="myTxt">100</span></div><div class="bar"><div id="myHealth"></div></div>
   <div>RIVAL IA 👹 <span id="enTxt">100</span> - <span id="stateTxt">esperando</span></div><div class="bar"><div id="enemyHealth"></div></div>
 </div>
-<div id="msg">1- Tocá PERMITIR CÁMARA Y MOVIMIENTO<br>2- Tocá EMPEZAR<br>3- Poné el celu en los lentes</div>
+<div id="msg">1- Cerrá todas las pestañas<br>2- Tocá PERMITIR<br>3- Tocá EMPEZAR</div>
 <button id="startBtn">▶ EMPEZAR PELEA</button>
 <button id="perm">📷 PERMITIR CÁMARA Y MOVIMIENTO</button>
 <video id="camPreview" autoplay playsinline muted></video>
 <div id="handDot"></div>
 <div id="stepInfo">Pasos: 0 | Mano: no detectada</div>
-
 <a-scene>
   <a-sky color="#87CEEB"></a-sky>
   <a-plane position="0 0 0" rotation="-90 0 0" width="50" height="50" color="#7BC8A4"></a-plane>
   <a-ring position="0 0.01 0" rotation="-90 0 0" radius-inner="2.8" radius-outer="3.1" color="white"></a-ring>
-  <a-entity id="player" position="0 1.6 7">
-    <a-camera look-controls="pointerLockEnabled:false"><a-cursor color="yellow"></a-cursor></a-camera>
-  </a-entity>
+  <a-entity id="player" position="0 1.6 7"><a-camera look-controls="pointerLockEnabled:false"><a-cursor color="yellow"></a-cursor></a-camera></a-entity>
   <a-entity id="enemy" position="0 1.25 -1">
     <a-box position="0 0 0" width="1.05" height="1.5" depth="0.6" color="#c0392b" id="body"></a-box>
     <a-box position="0 1.05 0" width="0.62" height="0.62" depth="0.62" color="#f1c27d"></a-box>
@@ -53,100 +48,49 @@
     <a-box id="armR" position="0.7 0.2 0.2" width="0.28" height="1.05" depth="0.28" color="#c0392b"></a-box>
   </a-entity>
 </a-scene>
-
 <script>
 let started=false, myHP=100, enemyHP=100, steps=0;
 let lastEnemyAttack=0, enemyCooldownUntil=0, nextThink=0, enemyMode="chase", strafeDir=1, strafeUntil=0;
-let lastStepTime=0, lastAccel=0;
-let handHistory=[]; // para detectar velocidad de la mano
-let lastPunchTime=0;
-
-const player=document.querySelector("#player");
-const enemy=document.querySelector("#enemy");
-const damageEl=document.querySelector("#damage");
-const msgEl=document.querySelector("#msg");
-const stepInfo=document.querySelector("#stepInfo");
-const handDot=document.querySelector("#handDot");
-
-// ============ 1. PERMISOS ============
+let lastStepTime=0, lastAccel=0, handHistory=[], lastPunchTime=0;
+const player=document.querySelector("#player"), enemy=document.querySelector("#enemy");
+const damageEl=document.querySelector("#damage"), msgEl=document.querySelector("#msg");
+const stepInfo=document.querySelector("#stepInfo"), handDot=document.querySelector("#handDot");
 document.querySelector("#perm").addEventListener("click", async ()=>{
-  // Cámara trasera - la que mira para adelante cuando está en los lentes
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}, audio:false});
-    document.querySelector("#camPreview").srcObject=stream;
-    startHandTracking();
-    msgEl.textContent="Cámara OK. Ahora permití movimiento.";
-  }catch(e){ msgEl.textContent="No se pudo abrir la cámara. Revisá permisos."; }
-  // Sensor de movimiento para los pasos
-  if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){
-    try{ await DeviceMotionEvent.requestPermission(); }catch(e){}
-  }
+  if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){ try{ await DeviceMotionEvent.requestPermission(); }catch(e){} }
+  // ARREGLO: solo MediaPipe pide la cámara, no 2 veces
+  startHandTracking();
   document.querySelector("#perm").style.display="none";
-  msgEl.textContent="Listo. Tocá EMPEZAR y poné el celu en los lentes.";
+  msgEl.textContent="Cámara iniciada. Tocá EMPEZAR.";
 });
-
-document.querySelector("#startBtn").addEventListener("click",()=>{
-  started=true; document.querySelector("#startBtn").style.display="none";
-  msgEl.textContent="¡Caminá para moverte! Tirá golpes con tus manos de verdad.";
-});
-
-// ============ 2. DETECTAR PASOS CON EL ACELERÓMETRO ============
+document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; msgEl.textContent="¡Caminá para moverte! Tirá golpes con tus manos."; });
 window.addEventListener("devicemotion", (e)=>{
-  if(!started) return;
-  let acc=e.accelerationIncludingGravity;
-  if(!acc) return;
-  let total=Math.sqrt(acc.x*acc.x+acc.y*acc.y+acc.z*acc.z);
-  let now=Date.now();
-  // Cuando das un paso, el total pega un salto. Si es fuerte y pasó 400ms, es un paso
+  if(!started) return; let acc=e.accelerationIncludingGravity; if(!acc) return;
+  let total=Math.sqrt(acc.x*acc.x+acc.y*acc.y+acc.z*acc.z); let now=Date.now();
   if(Math.abs(total-lastAccel)>4 && now-lastStepTime>450){
-    lastStepTime=now; steps++;
-    stepInfo.textContent=`Pasos: ${steps} | Mano: ${handHistory.length>0?"detectada":"no detectada"}`;
-    // Mover al personaje 0.7m para donde estás mirando
-    let cam=document.querySelector("a-camera").getAttribute("rotation");
-    let rad=(cam.y||0)*Math.PI/180;
-    let fx=-Math.sin(rad), fz=-Math.cos(rad);
-    let p=player.getAttribute("position");
-    p.x+=fx*0.7; p.z+=fz*0.7;
-    p.x=Math.max(-9,Math.min(9,p.x)); p.z=Math.max(-9,Math.min(9,p.z));
-    player.setAttribute("position",p);
-    msgEl.textContent="👟 Paso! Pasos: "+steps;
-  }
-  lastAccel=total;
+    lastStepTime=now; steps++; stepInfo.textContent=`Pasos: ${steps} | Mano: ${handHistory.length>0?"detectada":"no detectada"}`;
+    let cam=document.querySelector("a-camera").getAttribute("rotation"); let rad=(cam.y||0)*Math.PI/180;
+    let fx=-Math.sin(rad), fz=-Math.cos(rad); let p=player.getAttribute("position");
+    p.x+=fx*0.7; p.z+=fz*0.7; p.x=Math.max(-9,Math.min(9,p.x)); p.z=Math.max(-9,Math.min(9,p.z));
+    player.setAttribute("position",p); msgEl.textContent="👟 Paso! Pasos: "+steps;
+  } lastAccel=total;
 });
-
-// ============ 3. DETECTAR GOLPES CON LA CÁMARA ============
 function startHandTracking(){
   const video=document.querySelector("#camPreview");
   const hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
   hands.setOptions({maxNumHands:1, modelComplexity:0, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
   hands.onResults((res)=>{
-    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){
-      handDot.style.display="none"; handHistory=[]; return;
-    }
-    let lm=res.multiHandLandmarks[0];
-    let wrist=lm[0]; // muñeca
-    let now=Date.now();
-    handDot.style.display="block";
-    // Mostramos la mano en pantalla chiquita para que sepas que te ve
-    handDot.style.left=(wrist.x*100)+"%";
-    handDot.style.top=(wrist.y*100)+"%";
-    handHistory.push({x:wrist.x, y:wrist.y, z:wrist.z, t:now, size: Math.abs(lm[5].x-lm[17].x)});
+    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ handDot.style.display="none"; handHistory=[]; return; }
+    let lm=res.multiHandLandmarks[0]; let wrist=lm[0]; let now=Date.now();
+    handDot.style.display="block"; handDot.style.left=(wrist.x*100)+"%"; handDot.style.top=(wrist.y*100)+"%";
+    handHistory.push({x:wrist.x, y:wrist.y, z:wrist.z, t:now});
     if(handHistory.length>8) handHistory.shift();
     if(handHistory.length>=4){
-      let first=handHistory[0], last=handHistory[handHistory.length-1];
-      let dt=(last.t-first.t)/1000;
+      let first=handHistory[0], last=handHistory[handHistory.length-1]; let dt=(last.t-first.t)/1000;
       if(dt>0 && dt<0.4){
-        let vx=(last.x-first.x)/dt, vy=(last.y-first.y)/dt, vz=(last.z-first.z)/dt;
-        let speed=Math.sqrt(vx*vx+vy*vy);
-        // Si la mano se movió MUY rápido, es un golpe
+        let vx=(last.x-first.x)/dt, vy=(last.y-first.y)/dt; let speed=Math.sqrt(vx*vx+vy*vy);
         if(speed>1.8 && now-lastPunchTime>700){
-          lastPunchTime=now;
-          let type="jab";
-          if(vy<-1.2) type="upper"; // de abajo para arriba
-          else if(Math.abs(vx)>1.2) type="hook"; // de costado
-          else type="jab"; // para adelante
-          doMyPunch(type);
-          handHistory=[];
+          lastPunchTime=now; let type="jab"; if(vy<-1.2) type="upper"; else if(Math.abs(vx)>1.2) type="hook"; else type="jab";
+          doMyPunch(type); handHistory=[];
         }
       }
     }
@@ -154,7 +98,6 @@ function startHandTracking(){
   const cam=new Camera(video,{onFrame:async()=>{ await hands.send({image:video}); }, width:640, height:480});
   cam.start();
 }
-
 function doMyPunch(type){
   if(!started || enemyHP<=0) return;
   let p=player.getAttribute("position"), e=enemy.getAttribute("position");
@@ -162,8 +105,7 @@ function doMyPunch(type){
   if(dist>2.6){ msgEl.textContent="Estás lejos! Da un paso para acercarte y pegá."; return; }
   let dmg= type==="jab"?9 : type==="hook"?14 : 20;
   enemyHP=Math.max(0,enemyHP-dmg);
-  document.querySelector("#enemyHealth").style.width=enemyHP+"%";
-  document.querySelector("#enTxt").textContent=enemyHP;
+  document.querySelector("#enemyHealth").style.width=enemyHP+"%"; document.querySelector("#enTxt").textContent=enemyHP;
   msgEl.textContent = type==="jab"?"¡RECTO CON TU MANO! -"+dmg : type==="hook"?"¡GANCHO CON TU MANO! -"+dmg : "¡UPPERCUT CON TU MANO! -"+dmg;
   let dx=e.x-p.x, dz=e.z-p.z, l=Math.hypot(dx,dz)||1;
   enemy.setAttribute("position",{x:e.x+dx/l*0.35, y:e.y, z:e.z+dz/l*0.35});
@@ -171,15 +113,11 @@ function doMyPunch(type){
   setTimeout(()=>document.querySelector("#body").setAttribute("color","#c0392b"),130);
   if(enemyHP<=0){ msgEl.textContent="🏆 ¡GANASTE CON TUS MANOS!"; enemy.setAttribute("visible","false"); }
 }
-
 function showRed(){ damageEl.style.opacity="1"; setTimeout(()=>damageEl.style.opacity="0.65",400); setTimeout(()=>damageEl.style.opacity="0",1400); }
-
 function enemyPunchAnim(type){
   const armL=document.querySelector("#armL"), armR=document.querySelector("#armR");
   armL.setAttribute("position","-0.7 0.2 0.2"); armR.setAttribute("position","0.7 0.2 0.2");
-  armL.setAttribute("rotation","0 0 0"); armR.setAttribute("rotation","0 0 0");
-  let t=0; let id=setInterval(()=>{
-    t+=30;
+  let t=0; let id=setInterval(()=>{ t+=30;
     if(type==="jab") armR.setAttribute("position",`0.3 0.2 ${0.2+t*0.015}`);
     else if(type==="hookL") armL.setAttribute("rotation",`0 ${-t*0.8} 0`);
     else if(type==="hookR") armR.setAttribute("rotation",`0 ${t*0.8} 0`);
@@ -187,53 +125,28 @@ function enemyPunchAnim(type){
     if(t>220){ clearInterval(id); armL.setAttribute("position","-0.7 0.2 0.2"); armR.setAttribute("position","0.7 0.2 0.2"); armL.setAttribute("rotation","0 0 0"); armR.setAttribute("rotation","0 0 0"); }
   },30);
 }
-
-// ============ 4. IA DEL RIVAL (igual que antes, sin tembleque) ============
 let lastTime=performance.now();
 function loop(now){
-  requestAnimationFrame(loop);
-  let dt=Math.min(0.05,(now-lastTime)/1000); lastTime=now;
+  requestAnimationFrame(loop); let dt=Math.min(0.05,(now-lastTime)/1000); lastTime=now;
   if(!started || enemyHP<=0 || myHP<=0) return;
-  let p=player.getAttribute("position");
-  let e=enemy.getAttribute("position");
-  let dx=p.x-e.x, dz=p.z-e.z;
-  let dist=Math.hypot(dx,dz)||0.001;
-  let targetRot=Math.atan2(dx,dz)*180/Math.PI;
-  let curRot=enemy.getAttribute("rotation").y||0;
-  let diff=((targetRot-curRot+540)%360)-180;
-  enemy.setAttribute("rotation",{x:0,y:curRot+diff*Math.min(1,dt*8),z:0});
-  if(now>nextThink){
-    nextThink=now+500;
-    if(dist>2.2) enemyMode="chase"; else if(dist>1.4) enemyMode="circle"; else enemyMode="attack";
-    strafeDir=Math.random()<0.5?-1:1; strafeUntil=now+600+Math.random()*600;
-    document.querySelector("#stateTxt").textContent = enemyMode==="chase"?"te persigue" : enemyMode==="circle"?"buscando hueco" : "atacando";
-  }
+  let p=player.getAttribute("position"); let e=enemy.getAttribute("position");
+  let dx=p.x-e.x, dz=p.z-e.z; let dist=Math.hypot(dx,dz)||0.001;
+  let targetRot=Math.atan2(dx,dz)*180/Math.PI; let curRot=enemy.getAttribute("rotation").y||0;
+  let diff=((targetRot-curRot+540)%360)-180; enemy.setAttribute("rotation",{x:0,y:curRot+diff*Math.min(1,dt*8),z:0});
+  if(now>nextThink){ nextThink=now+500; if(dist>2.2) enemyMode="chase"; else if(dist>1.4) enemyMode="circle"; else enemyMode="attack"; strafeDir=Math.random()<0.5?-1:1; strafeUntil=now+600+Math.random()*600; document.querySelector("#stateTxt").textContent = enemyMode==="chase"?"te persigue" : enemyMode==="circle"?"buscando hueco" : "atacando"; }
   let speed=0, mx=0, mz=0;
   if(enemyMode==="chase"){ speed=1.7; mx=dx/dist; mz=dz/dist; }
   else if(enemyMode==="circle"){ let px=-dz/dist*strafeDir, pz=dx/dist*strafeDir; mx=px*0.8+dx/dist*0.4; mz=pz*0.8+dz/dist*0.4; speed=1.2; if(now>strafeUntil) strafeDir*=-1; }
   else if(enemyMode==="attack"){ speed=0.4; mx=dx/dist*0.3; mz=dz/dist*0.3; }
   if(dist<1.1){ mx=0; mz=0; speed=0; }
-  e.x+=mx*speed*dt; e.z+=mz*speed*dt;
-  e.x=Math.max(-9,Math.min(9,e.x)); e.z=Math.max(-9,Math.min(9,e.z));
-  let walkBob = speed>0.5 ? Math.sin(now*0.012)*0.04 : 0;
-  enemy.setAttribute("position",{x:e.x, y:1.25+walkBob, z:e.z});
+  e.x+=mx*speed*dt; e.z+=mz*speed*dt; e.x=Math.max(-9,Math.min(9,e.x)); e.z=Math.max(-9,Math.min(9,e.z));
+  let walkBob = speed>0.5 ? Math.sin(now*0.012)*0.04 : 0; enemy.setAttribute("position",{x:e.x, y:1.25+walkBob, z:e.z});
   if(dist<1.9 && now>enemyCooldownUntil && now-lastEnemyAttack>1800){
     lastEnemyAttack=now; enemyCooldownUntil=now+400;
-    let moves=["jab","hookL","hookR","upper"];
-    let move=moves[Math.floor(Math.random()*moves.length)];
+    let moves=["jab","hookL","hookR","upper"]; let move=moves[Math.floor(Math.random()*moves.length)];
     enemyPunchAnim(move);
-    setTimeout(()=>{
-      let pp=player.getAttribute("position"); let ee=enemy.getAttribute("position");
-      let d2=Math.hypot(pp.x-ee.x, pp.z-ee.z);
-      if(d2<2.4){
-        let dmg= move==="jab"?7 : move==="upper"?18 : 12;
-        myHP=Math.max(0,myHP-dmg);
-        document.querySelector("#myHealth").style.width=myHP+"%";
-        document.querySelector("#myTxt").textContent=myHP;
-        showRed();
-        msgEl.textContent = move==="jab"?"Te metió un RECTO -"+dmg : move==="upper"?"Te metió un UPPERCUT -"+dmg : "Te metió un GANCHO -"+dmg;
-        if(myHP<=0) msgEl.textContent="💀 TE GANÓ LA IA.";
-      }
+    setTimeout(()=>{ let pp=player.getAttribute("position"); let ee=enemy.getAttribute("position"); let d2=Math.hypot(pp.x-ee.x, pp.z-ee.z);
+      if(d2<2.4){ let dmg= move==="jab"?7 : move==="upper"?18 : 12; myHP=Math.max(0,myHP-dmg); document.querySelector("#myHealth").style.width=myHP+"%"; document.querySelector("#myTxt").textContent=myHP; showRed(); msgEl.textContent = move==="jab"?"Te metió un RECTO -"+dmg : move==="upper"?"Te metió un UPPERCUT -"+dmg : "Te metió un GANCHO -"+dmg; if(myHP<=0) msgEl.textContent="💀 TE GANÓ LA IA."; }
     },250);
   }
 }
