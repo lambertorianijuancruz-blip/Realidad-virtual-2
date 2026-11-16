@@ -1,143 +1,170 @@
-<!doctype html>
-<html lang="es">
+<!DOCTYPE html>
+<html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rival sin ARCore - Giroscopio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pelea VR</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <style>
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:Arial,sans-serif}
-#menu{position:fixed;inset:0;z-index:10;background:#10141c;padding:20px;text-align:center;overflow:auto}
-button{padding:14px 18px;border:0;border-radius:10px;background:#d93248;color:#fff;font-size:17px;margin:6px}
-#juego{display:none;position:fixed;inset:0;background:#000}
-#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-#lienzo{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
-#hud{position:absolute;z-index:3;top:12px;left:0;right:0;text-align:center;text-shadow:0 2px 6px #000;pointer-events:none}
-#controles{position:absolute;z-index:4;left:0;right:0;bottom:16px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
-#controles button{background:#222;border:1px solid #555;font-size:15px}
-#info{color:#ffd27d}
+  body { margin:0; overflow:hidden; font-family: sans-serif; }
+  /* BORDE ROJO CUANDO TE ATACA */
+  #damage {
+    position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    box-shadow: inset 0 0 120px 60px rgba(255,0,0,0.9);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  #hud {
+    position: fixed; top: 10px; left: 10px; right: 10px; z-index: 20;
+    color: white; text-shadow: 1px 1px 3px black; pointer-events: none;
+  }
+  .bar { height: 18px; background: #333; border: 2px solid white; border-radius: 10px; overflow: hidden; margin-bottom: 5px; }
+  #myHealth { height: 100%; width: 100%; background: limegreen; }
+  #enemyHealth { height: 100%; width: 100%; background: red; }
+  #msg {
+    position: fixed; bottom: 20px; left: 0; right: 0; text-align: center;
+    color: white; font-size: 20px; z-index: 20; text-shadow: 1px 1px 4px black; pointer-events: none;
+  }
+  #startBtn {
+    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+    padding: 15px 30px; font-size: 20px; border-radius: 15px; border: none;
+    background: #ffcc00; z-index: 30;
+  }
 </style>
 </head>
 <body>
-<div id="menu">
-  <h2>Rival sin ARCore</h2>
-  <p>Funciona en cualquier Android.<br>Usa cámara + giroscopio, no necesita ARCore.</p>
-  <button id="empezar">Activar cámara y giroscopio</button>
-  <p id="info">1. Aceptá cámara y sensores de movimiento.<br>2. Apuntá a donde querés dejarlo.<br>3. Tocá "Fijar rival acá".<br>4. Girá y ya no lo ves. Volvé y reaparece.</p>
-</div>
 
-<div id="juego">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="lienzo"></canvas>
-  <div id="hud">Apuntá a donde querés dejarlo y tocá Fijar</div>
-  <div id="controles">
-    <button id="fijar">Fijar rival acá</button>
-    <button id="cerca">Acercar</button>
-    <button id="lejos">Alejar</button>
-    <button id="salir">Salir</button>
-  </div>
+<div id="damage"></div>
+<div id="hud">
+  <div>YO ❤️</div><div class="bar"><div id="myHealth"></div></div>
+  <div>OPONENTE 👹</div><div class="bar"><div id="enemyHealth"></div></div>
 </div>
+<div id="msg">Tocá al oponente para golpearlo. Mové la cámara para mirar.</div>
+<button id="startBtn">▶ EMPEZAR PELEA</button>
+
+<a-scene>
+  <a-sky color="#87CEEB"></a-sky>
+  <a-plane position="0 0 0" rotation="-90 0 0" width="40" height="40" color="#7BC8A4"></a-plane>
+
+  <!-- JUGADOR / CAMARA -->
+  <a-entity id="player" position="0 1.6 8">
+    <a-camera look-controls wasd-controls>
+      <a-cursor color="yellow" fuse="false"></a-cursor>
+    </a-camera>
+  </a-entity>
+
+  <!-- OPONENTE -->
+  <a-entity id="enemy" position="0 1.2 -2">
+    <!-- cuerpo -->
+    <a-box position="0 0 0" width="1" height="1.6" depth="0.6" color="#c0392b"></a-box>
+    <!-- cabeza -->
+    <a-box position="0 1.1 0" width="0.6" height="0.6" depth="0.6" color="#f1c27d"></a-box>
+    <!-- ojos -->
+    <a-box position="-0.15 1.15 0.32" width="0.12" height="0.12" depth="0.05" color="black"></a-box>
+    <a-box position="0.15 1.15 0.32" width="0.12" height="0.12" depth="0.05" color="black"></a-box>
+    <!-- brazos -->
+    <a-box id="armL" position="-0.65 0.3 0" width="0.25" height="1" depth="0.25" color="#c0392b"></a-box>
+    <a-box id="armR" position="0.65 0.3 0" width="0.25" height="1" depth="0.25" color="#c0392b"></a-box>
+  </a-entity>
+</a-scene>
 
 <script>
-let yawActual=0, yawFijado=null, escala=1, golpeHasta=0;
-let stream=null;
-const video=document.getElementById('video');
-const canvas=document.getElementById('lienzo');
-const ctx=canvas.getContext('2d');
-const hud=document.getElementById('hud');
+let started = false;
+let myHP = 100, enemyHP = 100;
+let lastAttack = 0;
+let enemyState = "chase"; // chase, attack, cooldown
 
-function ajustar(){
-  const dpr=Math.min(devicePixelRatio||1,2);
-  canvas.width=innerWidth*dpr; canvas.height=innerHeight*dpr;
-  canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px';
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-}
+const player = document.querySelector("#player");
+const enemy = document.querySelector("#enemy");
+const damageEl = document.querySelector("#damage");
+const msgEl = document.querySelector("#msg");
 
-document.getElementById('empezar').onclick=async()=>{
-  try{
-    // Pedir permiso de sensores en iPhone, en Android no hace nada
-    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
-      await DeviceOrientationEvent.requestPermission();
-    }
-    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'}}});
-    video.srcObject=stream; await video.play();
-    document.getElementById('menu').style.display='none';
-    document.getElementById('juego').style.display='block';
-    ajustar(); addEventListener('resize',ajustar);
-    requestAnimationFrame(dibujar);
-  }catch(e){ document.getElementById('info').textContent='No se pudo: '+e.message; }
-};
-
-// Giroscopio: alpha = hacia donde apunta el celu
-addEventListener('deviceorientation',(e)=>{
-  if(e.alpha!=null) yawActual=e.alpha;
+document.querySelector("#startBtn").addEventListener("click", () => {
+  started = true;
+  document.querySelector("#startBtn").style.display = "none";
+  msgEl.textContent = "¡Te está persiguiendo! Tocálo para pegarle.";
 });
 
-document.getElementById('fijar').onclick=()=>{
-  yawFijado=yawActual;
-  hud.textContent='Rival fijado. Girá y desaparece. Volvé y reaparece.';
-};
-document.getElementById('cerca').onclick=()=>{escala=Math.min(1.8,escala+.15)};
-document.getElementById('lejos').onclick=()=>{escala=Math.max(.55,escala-.15)};
-document.getElementById('salir').onclick=()=>{ if(stream) stream.getTracks().forEach(t=>t.stop()); location.reload(); };
-
-function diffAng(a,b){ let d=a-b; while(d>180)d-=360; while(d<-180)d+=360; return d; }
-
-function dibujar(ms){
-  const w=innerWidth,h=innerHeight;
-  ctx.clearRect(0,0,w,h);
-  if(yawFijado==null){
-    // Si todavía no fijaste, mostralo en el centro como guía
-    dibujarRival(w/2,h*0.84,escala,ms);
-  }else{
-    const diff=diffAng(yawFijado,yawActual);
-    // Si giraste más de 45 grados, no lo ves
-    if(Math.abs(diff)<45){
-      // Lo movemos en X según cuánto giraste
-      const x=w/2 + (diff/45)*(w*0.4);
-      dibujarRival(x,h*0.84,escala,ms);
-      hud.textContent='Rival acá. Girá para que desaparezca.';
-    }else{
-      hud.textContent='Giraste, el rival quedó atrás tuyo. Volvé a mirar.';
-    }
-  }
-  requestAnimationFrame(dibujar);
-}
-
-function dibujarRival(cx,base,escala,ms){
-  const s=Math.min(innerWidth,innerHeight)*0.31*escala;
-  const golpe=ms<golpeHasta;
-  ctx.save(); ctx.translate(cx,base); ctx.scale(s/220,s/220);
-  ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0,0,95,18,0,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#202b3b'; ctx.lineWidth=34; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(-27,-100); ctx.lineTo(-42,-14); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(27,-100); ctx.lineTo(42,-14); ctx.stroke();
-  ctx.fillStyle='#30445e'; ctx.beginPath(); ctx.roundRect(-55,-250,110,155,26); ctx.fill();
-  ctx.fillStyle='#bd8060'; ctx.beginPath(); ctx.ellipse(0,-286,38,43,0,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#171d26'; ctx.beginPath(); ctx.ellipse(0,-316,40,17,0,Math.PI,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#bd8060'; ctx.lineWidth=25;
-  ctx.beginPath(); ctx.moveTo(-52,-225); ctx.lineTo(golpe?-105:-88,-165); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(52,-225); ctx.lineTo(golpe?105:88,-165); ctx.stroke();
-  ctx.fillStyle='#df3448';
-  ctx.beginPath(); ctx.arc(golpe?-112:-90,-150,25,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(golpe?112:90,-150,25,0,Math.PI*2); ctx.fill();
-  ctx.restore();
-}
-
-canvas.addEventListener('pointerdown',(e)=>{
-  if(yawFijado==null) return;
-  const r=canvas.getBoundingClientRect();
-  const x=e.clientX-r.left, y=e.clientY-r.top;
-  const diff=diffAng(yawFijado,yawActual);
-  const cx=innerWidth/2 + (diff/45)*(innerWidth*0.4);
-  const cy=innerHeight*0.48;
-  const radio=Math.min(innerWidth,innerHeight)*0.34*escala;
-  if(Math.hypot(x-cx,y-cy)<radio){
-    golpeHasta=performance.now()+260;
-    hud.textContent='¡Le pegaste!';
-    if(navigator.vibrate) navigator.vibrate(60);
+// VOS LO GOLPEAS - tocás al oponente
+enemy.addEventListener("click", () => {
+  if (!started) return;
+  if (enemyHP <= 0) return;
+  enemyHP -= 12;
+  document.querySelector("#enemyHealth").style.width = enemyHP + "%";
+  // lo empujás un poco para atrás
+  let p = enemy.getAttribute("position");
+  let pp = player.getAttribute("position");
+  let dx = p.x - pp.x, dz = p.z - pp.z;
+  let len = Math.sqrt(dx*dx + dz*dz) || 1;
+  enemy.setAttribute("position", {x: p.x + dx/len*0.8, y: p.y, z: p.z + dz/len*0.8});
+  // parpadea blanco cuando le pegás
+  enemy.setAttribute("material", "color", "white");
+  setTimeout(()=> enemy.removeAttribute("material"), 120);
+  msgEl.textContent = "¡LE PEGASTE! Vida del oponente: " + enemyHP;
+  if (enemyHP <= 0) {
+    msgEl.textContent = "🏆 ¡GANASTE! Recargá la página para jugar de nuevo.";
+    enemy.setAttribute("visible", "false");
   }
 });
+
+function showRedBorder() {
+  damageEl.style.opacity = "1";
+  // queda rojo 1.2 segundos y se va de a poco
+  setTimeout(()=> damageEl.style.opacity = "0.6", 400);
+  setTimeout(()=> damageEl.style.opacity = "0", 1200);
+}
+
+// LOOP PRINCIPAL - el oponente te persigue y ataca
+function loop() {
+  requestAnimationFrame(loop);
+  if (!started || enemyHP <= 0 || myHP <= 0) return;
+
+  let p = player.getAttribute("position");
+  let e = enemy.getAttribute("position");
+  let dx = p.x - e.x;
+  let dz = p.z - e.z;
+  let dist = Math.sqrt(dx*dx + dz*dz);
+
+  // que mire siempre hacia vos
+  enemy.object3D.lookAt(p.x, e.y, p.z);
+
+  let now = Date.now();
+
+  if (dist > 1.8) {
+    // 1. ACORTAR DISTANCIA - te persigue
+    enemyState = "chase";
+    let speed = 0.045; // velocidad de persecución
+    e.x += dx/dist * speed;
+    e.z += dz/dist * speed;
+    // animación de caminar (se balancea)
+    enemy.setAttribute("position", {x: e.x, y: 1.2 + Math.sin(now*0.02)*0.05, z: e.z});
+  } else {
+    // 2. ESTÁ CERCA - ATACA cada 2 segundos
+    enemy.setAttribute("position", {x: e.x, y: 1.2, z: e.z});
+    if (now - lastAttack > 2000) {
+      lastAttack = now;
+      enemyState = "attack";
+      // se lanza hacia vos
+      e.x += dx/dist * 0.5;
+      e.z += dz/dist * 0.5;
+      enemy.setAttribute("position", {x: e.x, y: 1.2, z: e.z});
+
+      // TE PEGA - te baja vida y pone borde rojo
+      myHP -= 15;
+      document.querySelector("#myHealth").style.width = myHP + "%";
+      showRedBorder();
+      msgEl.textContent = "¡TE PEGÓ! Tu vida: " + myHP;
+      if (myHP <= 0) {
+        msgEl.textContent = "💀 TE GANÓ. Recargá la página para revancha.";
+      }
+      // vuelve para atrás después del golpe
+      setTimeout(()=>{
+        let ee = enemy.getAttribute("position");
+        enemy.setAttribute("position", {x: ee.x - dx/dist*0.5, y: 1.2, z: ee.z - dz/dist*0.5});
+      }, 300);
+    }
+  }
+}
+loop();
 </script>
 </body>
 </html>
