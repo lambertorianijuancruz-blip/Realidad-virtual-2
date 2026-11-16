@@ -8,9 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <style>
   body{margin:0;overflow:hidden;background:black;font-family:sans-serif}
-  /* CÁMARA A PANTALLA COMPLETA - VES TU PUÑO REAL */
   #camPreview{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
-  /* La escena VR transparente para que se vea la cámara atrás */
   a-scene{position:fixed;inset:0;z-index:2;background:transparent !important}
   #damage{position:fixed;inset:0;pointer-events:none;z-index:10;box-shadow:inset 0 0 130px 70px rgba(255,0,0,.95);opacity:0;transition:opacity .25s}
   #hud{position:fixed;top:8px;left:10px;right:10px;z-index:20;color:white;text-shadow:1px 1px 3px black;pointer-events:none}
@@ -20,26 +18,29 @@
   #msg{position:fixed;top:90px;left:0;right:0;text-align:center;color:white;z-index:20;text-shadow:1px 1px 4px black;font-size:18px}
   #startBtn{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:18px 34px;font-size:22px;border-radius:15px;border:none;background:#ffcc00;z-index:40;font-weight:bold}
   #perm{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 20px;background:white;border-radius:12px;z-index:40;font-weight:bold}
-  #handDot{position:fixed;left:50%;top:50%;width:50px;height:50px;border-radius:50%;background:rgba(0,255,0,.35);z-index:25;transform:translate(-50%,-50%);border:4px solid lime;display:none;pointer-events:none}
+  /* EL RECORTE DE TU PUÑO PEGADO ARRIBA */
+  #fistCut{position:fixed;width:180px;height:180px;border-radius:50%;border:5px solid lime;z-index:30;pointer-events:none;display:none;transform:translate(-50%,-50%);object-fit:cover;box-shadow:0 0 20px lime}
+  #fistLabel{position:fixed;left:50%;top:62%;transform:translateX(-50%);color:lime;z-index:31;font-weight:bold;text-shadow:1px 1px 3px black;display:none;font-size:18px}
   #stepInfo{position:fixed;bottom:10px;left:10px;color:white;z-index:20;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:10px;font-size:14px}
-  #fistLabel{position:fixed;left:50%;top:62%;transform:translateX(-50%);color:lime;z-index:26;font-weight:bold;text-shadow:1px 1px 3px black;display:none;font-size:18px}
+  #hitFlash{position:fixed;inset:0;background:rgba(255,255,0,.35);z-index:35;pointer-events:none;opacity:0;transition:opacity .15s}
 </style>
 </head>
 <body>
 <video id="camPreview" autoplay playsinline muted></video>
+<canvas id="fistCanvas" width="220" height="220" style="display:none"></canvas>
+<img id="fistCut">
+<div id="hitFlash"></div>
 <div id="damage"></div>
 <div id="hud">
   <div>YO ❤️ <span id="myTxt">100</span></div><div class="bar"><div id="myHealth"></div></div>
   <div>RIVAL IA 👹 <span id="enTxt">100</span> - <span id="stateTxt">esperando</span></div><div class="bar"><div id="enemyHealth"></div></div>
 </div>
-<div id="msg">1- Tocá PERMITIR<br>2- Vas a ver tu puño real en pantalla<br>3- Tocá EMPEZAR</div>
+<div id="msg">1- Tocá PERMITIR<br>2- Vas a ver tu puño recortado en un círculo<br>3- Tocá EMPEZAR y pegale</div>
 <button id="startBtn">▶ EMPEZAR PELEA</button>
 <button id="perm">📷 PERMITIR CÁMARA DE ATRÁS</button>
-<div id="handDot"></div>
 <div id="fistLabel">👊 TU PUÑO</div>
 <div id="stepInfo">Pasos: 0 | Mano: no detectada</div>
 <a-scene embedded renderer="alpha:true" vr-mode-ui="enabled:false">
-  <!-- Sin cielo, para que se vea tu cámara -->
   <a-entity id="player" position="0 1.6 7"><a-camera look-controls="pointerLockEnabled:false"><a-cursor color="yellow"></a-cursor></a-camera></a-entity>
   <a-entity id="enemy" position="0 1.25 -1">
     <a-box position="0 0 0" width="1.05" height="1.5" depth="0.6" color="#c0392b" id="body"></a-box>
@@ -56,14 +57,15 @@ let lastEnemyAttack=0, enemyCooldownUntil=0, nextThink=0, enemyMode="chase", str
 let lastStepTime=0, lastAccel=0, handHistory=[], lastPunchTime=0;
 const player=document.querySelector("#player"), enemy=document.querySelector("#enemy");
 const damageEl=document.querySelector("#damage"), msgEl=document.querySelector("#msg");
-const stepInfo=document.querySelector("#stepInfo"), handDot=document.querySelector("#handDot"), fistLabel=document.querySelector("#fistLabel");
+const stepInfo=document.querySelector("#stepInfo"), fistCut=document.querySelector("#fistCut"), fistLabel=document.querySelector("#fistLabel");
+const fistCanvas=document.querySelector("#fistCanvas"), fistCtx=fistCanvas.getContext("2d");
 document.querySelector("#perm").addEventListener("click", async ()=>{
   if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){ try{ await DeviceMotionEvent.requestPermission(); }catch(e){} }
   startHandTracking();
   document.querySelector("#perm").style.display="none";
-  msgEl.textContent="Cámara de ATRÁS a pantalla completa...";
+  msgEl.textContent="Cámara de ATRÁS prendida...";
 });
-document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; msgEl.textContent="¡Mirá tu puño real! Pegale al rival."; });
+document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; msgEl.textContent="¡DALE! Tirá el puño y vas a ver que SÍ le sacás vida."; });
 window.addEventListener("devicemotion", (e)=>{
   if(!started) return; let acc=e.accelerationIncludingGravity; if(!acc) return;
   let total=Math.sqrt(acc.x*acc.x+acc.y*acc.y+acc.z*acc.z); let now=Date.now();
@@ -72,7 +74,7 @@ window.addEventListener("devicemotion", (e)=>{
     let cam=document.querySelector("a-camera").getAttribute("rotation"); let rad=(cam.y||0)*Math.PI/180;
     let fx=-Math.sin(rad), fz=-Math.cos(rad); let p=player.getAttribute("position");
     p.x+=fx*0.7; p.z+=fz*0.7; p.x=Math.max(-9,Math.min(9,p.x)); p.z=Math.max(-9,Math.min(9,p.z));
-    player.setAttribute("position",p); msgEl.textContent="👟 Paso! Pasos: "+steps;
+    player.setAttribute("position",p);
   } lastAccel=total;
 });
 async function startHandTracking(){
@@ -80,20 +82,31 @@ async function startHandTracking(){
   const hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
   hands.setOptions({maxNumHands:1, modelComplexity:0, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
   hands.onResults((res)=>{
-    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ handDot.style.display="none"; fistLabel.style.display="none"; handHistory=[]; return; }
+    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ fistCut.style.display="none"; fistLabel.style.display="none"; handHistory=[]; return; }
     let lm=res.multiHandLandmarks[0]; let wrist=lm[0]; let now=Date.now();
-    // EL PUNTO VERDE SIGUE A TU PUÑO REAL
-    handDot.style.display="block"; fistLabel.style.display="block";
-    handDot.style.left=(wrist.x*100)+"%"; handDot.style.top=(wrist.y*100)+"%";
-    fistLabel.style.left=(wrist.x*100)+"%"; fistLabel.style.top=(wrist.y*100+8)+"%";
+    // RECORTAR Y PEGAR TU PUÑO
+    try{
+      let vx=wrist.x*video.videoWidth, vy=wrist.y*video.videoHeight;
+      let s=220; // tamaño del recorte
+      let sx=Math.max(0, vx-s/2), sy=Math.max(0, vy-s/2);
+      fistCtx.clearRect(0,0,220,220);
+      fistCtx.save(); fistCtx.beginPath(); fistCtx.arc(110,110,110,0,Math.PI*2); fistCtx.clip();
+      fistCtx.drawImage(video, sx, sy, s, s, 0, 0, 220, 220);
+      fistCtx.restore();
+      fistCut.src=fistCanvas.toDataURL();
+    }catch(e){}
+    fistCut.style.display="block"; fistLabel.style.display="block";
+    fistCut.style.left=(wrist.x*100)+"%"; fistCut.style.top=(wrist.y*100)+"%";
+    fistLabel.style.left=(wrist.x*100)+"%"; fistLabel.style.top=(wrist.y*100+12)+"%";
     handHistory.push({x:wrist.x, y:wrist.y, t:now});
     if(handHistory.length>8) handHistory.shift();
-    if(handHistory.length>=4){
+    if(handHistory.length>=3){
       let first=handHistory[0], last=handHistory[handHistory.length-1]; let dt=(last.t-first.t)/1000;
-      if(dt>0 && dt<0.4){
+      if(dt>0 && dt<0.5){
         let vx=(last.x-first.x)/dt, vy=(last.y-first.y)/dt; let speed=Math.sqrt(vx*vx+vy*vy);
-        if(speed>1.8 && now-lastPunchTime>700){
-          lastPunchTime=now; let type="jab"; if(vy<-1.2) type="upper"; else if(Math.abs(vx)>1.2) type="hook"; else type="jab";
+        // MÁS FÁCIL PEGAR: antes pedía 1.8, ahora 1.0
+        if(speed>1.0 && now-lastPunchTime>400){
+          lastPunchTime=now; let type="jab"; if(vy<-1.0) type="upper"; else if(Math.abs(vx)>1.0) type="hook"; else type="jab";
           doMyPunch(type); handHistory=[];
         }
       }
@@ -102,33 +115,37 @@ async function startHandTracking(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
     video.srcObject = stream; await video.play();
-    msgEl.textContent="Listo, ves tu mano real. Tocá EMPEZAR.";
+    msgEl.textContent="Listo, ves tu puño recortado. Tocá EMPEZAR.";
     async function loopSend(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loopSend); }
     loopSend();
   }catch(e){
     try{
       const stream2 = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       video.srcObject = stream2; await video.play();
-      msgEl.textContent="Listo, ves tu mano real. Tocá EMPEZAR.";
+      msgEl.textContent="Listo, ves tu puño recortado. Tocá EMPEZAR.";
       async function loop2(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loop2); }
       loop2();
-    }catch(e2){ msgEl.textContent="No pude prender la cámara de atrás: "+e2.message; }
+    }catch(e2){ msgEl.textContent="No pude prender la cámara: "+e2.message; }
   }
 }
 function doMyPunch(type){
   if(!started || enemyHP<=0) return;
-  let p=player.getAttribute("position"), e=enemy.getAttribute("position");
-  let dist=Math.hypot(p.x-e.x, p.z-e.z);
-  if(dist>2.6){ msgEl.textContent="Estás lejos! Da un paso para acercarte y pegá."; return; }
-  let dmg= type==="jab"?9 : type==="hook"?14 : 20;
+  // ARREGLO DAÑO: YA NO IMPORTA LA DISTANCIA, SIEMPRE PEGA
+  let dmg= type==="jab"?15 : type==="hook"?22 : 30;
   enemyHP=Math.max(0,enemyHP-dmg);
   document.querySelector("#enemyHealth").style.width=enemyHP+"%"; document.querySelector("#enTxt").textContent=enemyHP;
-  msgEl.textContent = type==="jab"?"¡RECTO CON TU MANO! -"+dmg : type==="hook"?"¡GANCHO CON TU MANO! -"+dmg : "¡UPPERCUT CON TU MANO! -"+dmg;
+  // Efecto de que tu puño va hacia el rival
+  fistCut.style.width="230px"; fistCut.style.height="230px";
+  setTimeout(()=>{ fistCut.style.width="180px"; fistCut.style.height="180px"; },150);
+  let flash=document.querySelector("#hitFlash"); flash.style.opacity="1"; setTimeout(()=>flash.style.opacity="0",150);
+  msgEl.textContent = type==="jab"?"💥 ¡RECTO! -"+dmg+" ¡SÍ LE PEGASTE!" : type==="hook"?"💥 ¡GANCHO! -"+dmg+" ¡SÍ LE PEGASTE!" : "💥 ¡UPPERCUT! -"+dmg+" ¡SÍ LE PEGASTE!";
+  // El rival se va para atrás cuando le pegás
+  let p=player.getAttribute("position"), e=enemy.getAttribute("position");
   let dx=e.x-p.x, dz=e.z-p.z, l=Math.hypot(dx,dz)||1;
-  enemy.setAttribute("position",{x:e.x+dx/l*0.35, y:e.y, z:e.z+dz/l*0.35});
+  enemy.setAttribute("position",{x:e.x+dx/l*0.5, y:e.y, z:e.z+dz/l*0.5});
   document.querySelector("#body").setAttribute("color","white");
-  setTimeout(()=>document.querySelector("#body").setAttribute("color","#c0392b"),130);
-  if(enemyHP<=0){ msgEl.textContent="🏆 ¡GANASTE CON TUS MANOS!"; enemy.setAttribute("visible","false"); }
+  setTimeout(()=>document.querySelector("#body").setAttribute("color","#c0392b"),150);
+  if(enemyHP<=0){ msgEl.textContent="🏆 ¡GANASTE! ¡LO NOQUEASTE CON TU PUÑO REAL!"; enemy.setAttribute("visible","false"); }
 }
 function showRed(){ damageEl.style.opacity="1"; setTimeout(()=>damageEl.style.opacity="0.65",400); setTimeout(()=>damageEl.style.opacity="0",1400); }
 function enemyPunchAnim(type){
