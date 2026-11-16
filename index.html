@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Pelea VR - Tu Brazo Real en 3D</title>
+<title>Pelea VR - Casco con Cuerpo</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <style>
@@ -19,29 +19,25 @@
   #perm{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 20px;background:white;border-radius:12px;z-index:40;font-weight:bold}
   #stepInfo{position:fixed;bottom:10px;left:10px;color:white;z-index:30;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:10px;font-size:14px}
   #hitFlash{position:fixed;inset:0;background:rgba(255,255,0,.35);z-index:35;pointer-events:none;opacity:0;transition:opacity .15s}
-  /* TU BRAZO REAL RECORTADO, PEGADO ARRIBA DEL 3D */
-  #armCut{position:fixed;width:320px;height:420px;z-index:25;pointer-events:none;display:none;transform:translate(-50%,-50%);object-fit:cover;filter:drop-shadow(0 0 10px rgba(0,0,0,.5))}
-  #armLabel{position:fixed;color:white;background:rgba(0,0,0,.5);padding:4px 10px;border-radius:10px;z-index:26;display:none;font-weight:bold;transform:translateX(-50%)}
-  #joy{position:fixed;bottom:70px;right:15px;width:110px;height:110px;background:rgba(255,255,255,.25);border:2px solid white;border-radius:50%;z-index:30;display:none}
-  #joyKnob{position:absolute;left:35px;top:35px;width:40px;height:40px;background:white;border-radius:50%}
+  #armCut{position:fixed;width:320px;height:420px;z-index:25;pointer-events:none;display:none;transform:translate(-50%,-50%);object-fit:cover}
+  #calib{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);padding:12px 20px;background:#00c853;color:white;border:none;border-radius:12px;z-index:40;font-weight:bold;display:none}
 </style>
 </head>
 <body>
 <video id="camPreview" autoplay playsinline muted></video>
 <canvas id="armCanvas" width="300" height="400" style="display:none"></canvas>
 <img id="armCut">
-<div id="armLabel">TU BRAZO</div>
 <div id="hitFlash"></div>
 <div id="damage"></div>
 <div id="hud">
   <div>YO ❤️ <span id="myTxt">100</span></div><div class="bar"><div id="myHealth"></div></div>
   <div>RIVAL IA 👹 <span id="enTxt">100</span> - <span id="stateTxt">esperando</span></div><div class="bar"><div id="enemyHealth"></div></div>
 </div>
-<div id="msg">Campo 3D + TU BRAZO REAL<br>1- Tocá PERMITIR - 2- Tocá EMPEZAR<br>3- Caminá para moverte por el campo</div>
+<div id="msg">PONÉ EL CELU EN EL CASCO A LA ALTURA DE LOS OJOS<br>1- Tocá PERMITIR - 2- Tocá EMPEZAR<br>3- Ponete el casco y movete con el cuerpo</div>
 <button id="startBtn">▶ EMPEZAR PELEA</button>
-<button id="perm">📷 PERMITIR CÁMARA DE ATRÁS</button>
-<div id="stepInfo">Pasos: 0 | Brazo: no detectado</div>
-<div id="joy"><div id="joyKnob"></div></div>
+<button id="perm">📷 PERMITIR SENSORES + CÁMARA</button>
+<button id="calib">🎯 CENTRAR VISTA - MIRÁ AL RIVAL Y TOCÁ ACÁ</button>
+<div id="stepInfo">Pasos: 0 | Cabeza: 0° | Brazo: no detectado</div>
 <a-scene background="color: #87CEEB">
   <a-sky color="#87CEEB"></a-sky>
   <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#4CAF50"></a-plane>
@@ -55,8 +51,6 @@
   <a-sphere position="8 3 -6" radius="1.5" color="#228B22"></a-sphere>
   <a-cylinder position="-8 1 -6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
   <a-sphere position="-8 3 -6" radius="1.5" color="#228B22"></a-sphere>
-  <a-cylinder position="10 1 6" radius="0.4" height="2" color="#8B4513"></a-cylinder>
-  <a-sphere position="10 3 6" radius="1.5" color="#228B22"></a-sphere>
   <a-entity id="player" position="0 1.6 8" rotation="0 0 0"><a-camera look-controls="enabled:false"></a-camera></a-entity>
   <a-entity id="enemy" position="0 1.25 0">
     <a-box position="0 0 0" width="1.05" height="1.5" depth="0.6" color="#c0392b" id="body"></a-box>
@@ -71,58 +65,75 @@
 let started=false, myHP=100, enemyHP=100, steps=0;
 let lastEnemyAttack=0, enemyCooldownUntil=0, nextThink=0, enemyMode="chase", strafeDir=1, strafeUntil=0;
 let lastStepTime=0, lastAccel=0, handHistory=[], lastPunchTime=0;
-let joyActive=false, joyDX=0, joyDY=0;
+let headYaw=0, headPitch=0, yawOffset=0, lastOrientation=null;
 const player=document.querySelector("#player"), enemy=document.querySelector("#enemy");
 const damageEl=document.querySelector("#damage"), msgEl=document.querySelector("#msg");
-const stepInfo=document.querySelector("#stepInfo"), armCut=document.querySelector("#armCut"), armLabel=document.querySelector("#armLabel");
+const stepInfo=document.querySelector("#stepInfo"), armCut=document.querySelector("#armCut");
 const armCanvas=document.querySelector("#armCanvas"), armCtx=armCanvas.getContext("2d");
 document.querySelector("#perm").addEventListener("click", async ()=>{
+  // Pedir permiso para sensores del casco
   if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){ try{ await DeviceMotionEvent.requestPermission(); }catch(e){} }
+  if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){ try{ await DeviceOrientationEvent.requestPermission(); }catch(e){} }
   startHandTracking();
   document.querySelector("#perm").style.display="none";
-  msgEl.textContent="Cámara oculta. Solo recorta tu brazo real.";
+  document.querySelector("#calib").style.display="block";
+  msgEl.textContent="Sensores prendidos. Ponete el casco, mirá al rival y tocá CENTRAR VISTA.";
 });
-document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; document.querySelector("#joy").style.display="block"; msgEl.textContent="¡Mové tu brazo real! Caminá para moverte por el campo."; });
-// JOYSTICK PARA MOVERTE POR TODO EL ESPACIO
-const joy=document.querySelector("#joy"), knob=document.querySelector("#joyKnob");
-joy.addEventListener("touchstart", e=>{ joyActive=true; }, {passive:true});
-joy.addEventListener("touchmove", e=>{ let r=joy.getBoundingClientRect(); let t=e.touches[0]; joyDX=(t.clientX-(r.left+r.width/2))/55; joyDY=(t.clientY-(r.top+r.height/2))/55; joyDX=Math.max(-1,Math.min(1,joyDX)); joyDY=Math.max(-1,Math.min(1,joyDY)); knob.style.left=(35+joyDX*25)+"px"; knob.style.top=(35+joyDY*25)+"px"; }, {passive:true});
-joy.addEventListener("touchend", ()=>{ joyActive=false; joyDX=0; joyDY=0; knob.style.left="35px"; knob.style.top="35px"; });
-// PASOS TAMBIÉN MUEVEN
+document.querySelector("#calib").addEventListener("click", ()=>{
+  // Centrar la vista donde estás mirando ahora
+  yawOffset = headYaw;
+  document.querySelector("#calib").style.display="none";
+  msgEl.textContent="Vista centrada. Ahora movete con el cuerpo.";
+});
+document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; msgEl.textContent="¡Con el casco puesto! Mové la cabeza para mirar, caminá para moverte."; });
+// === TU CABEZA MUEVE LA CÁMARA ===
+window.addEventListener("deviceorientation", (e)=>{
+  if(e.alpha===null) return;
+  // alpha = a donde mirás con la cabeza (brújula), beta = arriba/abajo
+  headYaw = e.alpha || 0;
+  headPitch = e.beta || 0;
+  if(!started) return;
+  let yaw = headYaw - yawOffset;
+  // Aplicar rotación a tu jugador según tu cabeza
+  // Invertido porque el celu está en el casco mirando para adelante
+  let camYaw = -yaw;
+  // Pitch: cuando mirás para abajo/arriba
+  let pitch = Math.max(-30, Math.min(30, (headPitch-90)*0.5));
+  player.setAttribute("rotation", {x: pitch, y: camYaw, z: 0});
+  stepInfo.textContent=`Pasos: ${steps} | Cabeza: ${Math.round(camYaw)}° | Brazo: ${handHistory.length>0?"detectado":"no detectado"}`;
+});
+// === TUS PIES MUEVEN TU CUERPO EN EL JUEGO ===
 window.addEventListener("devicemotion", (e)=>{
   if(!started) return; let acc=e.accelerationIncludingGravity; if(!acc) return;
   let total=Math.sqrt(acc.x*acc.x+acc.y*acc.y+acc.z*acc.z); let now=Date.now();
-  if(Math.abs(total-lastAccel)>4 && now-lastStepTime>450){
-    lastStepTime=now; steps++; stepInfo.textContent=`Pasos: ${steps} | Brazo: ${handHistory.length>0?"detectado":"no detectado"}`;
-    movePlayer(0, -0.9);
+  // Cada paso que das con tus pies = un paso en el juego
+  if(Math.abs(total-lastAccel)>3.5 && now-lastStepTime>400){
+    lastStepTime=now; steps++;
+    // Caminás para donde estás MIRANDO con la cabeza
+    let yawRad = (player.getAttribute("rotation").y || 0) * Math.PI/180;
+    // Si el celu está en el casco, adelante es -Z
+    let fx = -Math.sin(yawRad), fz = -Math.cos(yawRad);
+    let p=player.getAttribute("position");
+    p.x += fx*0.8; p.z += fz*0.8;
+    p.x=Math.max(-15,Math.min(15,p.x)); p.z=Math.max(-15,Math.min(15,p.z));
+    player.setAttribute("position",p);
+    msgEl.textContent="👟 Paso con tu cuerpo! Pasos: "+steps;
   } lastAccel=total;
 });
-function movePlayer(dx, dz){
-  let p=player.getAttribute("position"); p.x+=dx; p.z+=dz; p.x=Math.max(-15,Math.min(15,p.x)); p.z=Math.max(-15,Math.min(15,p.z)); player.setAttribute("position",p);
-}
-setInterval(()=>{ if(started && joyActive){ movePlayer(joyDX*0.15, joyDY*0.15); } }, 50);
 async function startHandTracking(){
   const video=document.querySelector("#camPreview");
   const hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
   hands.setOptions({maxNumHands:1, modelComplexity:0, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
   hands.onResults((res)=>{
-    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ armCut.style.display="none"; armLabel.style.display="none"; handHistory=[]; return; }
+    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ armCut.style.display="none"; handHistory=[]; return; }
     let lm=res.multiHandLandmarks[0]; let wrist=lm[0]; let now=Date.now();
-    // RECORTAR TU BRAZO REAL - recorte GRANDE para que se vea brazo + puño
     try{
       let vx=wrist.x*video.videoWidth, vy=wrist.y*video.videoHeight;
-      // Recorte alto para agarrar brazo entero
-      let sw=300, sh=420;
-      let sx=Math.max(0, vx-sw/2), sy=Math.max(0, vy-sh*0.65);
-      armCtx.clearRect(0,0,300,400);
-      armCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 300, 400);
+      let sw=300, sh=420; let sx=Math.max(0, vx-sw/2), sy=Math.max(0, vy-sh*0.65);
+      armCtx.clearRect(0,0,300,400); armCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 300, 400);
       armCut.src=armCanvas.toDataURL();
     }catch(e){}
-    armCut.style.display="block"; armLabel.style.display="block";
-    // TU BRAZO REAL SIGUE A TU MANO EN LA PANTALLA
-    armCut.style.left=(wrist.x*100)+"%"; armCut.style.top=(wrist.y*100)+"%";
-    armLabel.style.left=(wrist.x*100)+"%"; armLabel.style.top=(wrist.y*100+22)+"%";
-    stepInfo.textContent=`Pasos: ${steps} | Brazo: detectado`;
+    armCut.style.display="block"; armCut.style.left=(wrist.x*100)+"%"; armCut.style.top=(wrist.y*100)+"%";
     handHistory.push({x:wrist.x, y:wrist.y, t:now});
     if(handHistory.length>8) handHistory.shift();
     if(handHistory.length>=3){
@@ -139,14 +150,14 @@ async function startHandTracking(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
     video.srcObject = stream; await video.play();
-    msgEl.textContent="Listo. Vas a ver tu brazo real en el campo 3D. Tocá EMPEZAR.";
+    msgEl.textContent="Listo. Ponete el casco y tocá EMPEZAR.";
     async function loopSend(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loopSend); }
     loopSend();
   }catch(e){
     try{
       const stream2 = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       video.srcObject = stream2; await video.play();
-      msgEl.textContent="Listo. Vas a ver tu brazo real en el campo 3D. Tocá EMPEZAR.";
+      msgEl.textContent="Listo. Ponete el casco y tocá EMPEZAR.";
       async function loop2(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loop2); }
       loop2();
     }catch(e2){ msgEl.textContent="No pude prender la cámara: "+e2.message; }
@@ -157,7 +168,6 @@ function doMyPunch(type){
   let dmg= type==="jab"?15 : type==="hook"?22 : 30;
   enemyHP=Math.max(0,enemyHP-dmg);
   document.querySelector("#enemyHealth").style.width=enemyHP+"%"; document.querySelector("#enTxt").textContent=enemyHP;
-  // TU BRAZO REAL SE AGRANDA COMO SI PEGARA
   armCut.style.width="380px"; armCut.style.height="500px";
   setTimeout(()=>{ armCut.style.width="320px"; armCut.style.height="420px"; },180);
   let flash=document.querySelector("#hitFlash"); flash.style.opacity="1"; setTimeout(()=>flash.style.opacity="0",150);
