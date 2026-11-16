@@ -1,143 +1,262 @@
-<!doctype html>
-<html lang="es">
+<!DOCTYPE html>
+<html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rival sin ARCore - Giroscopio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Pelea VR IA</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <style>
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:Arial,sans-serif}
-#menu{position:fixed;inset:0;z-index:10;background:#10141c;padding:20px;text-align:center;overflow:auto}
-button{padding:14px 18px;border:0;border-radius:10px;background:#d93248;color:#fff;font-size:17px;margin:6px}
-#juego{display:none;position:fixed;inset:0;background:#000}
-#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-#lienzo{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
-#hud{position:absolute;z-index:3;top:12px;left:0;right:0;text-align:center;text-shadow:0 2px 6px #000;pointer-events:none}
-#controles{position:absolute;z-index:4;left:0;right:0;bottom:16px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
-#controles button{background:#222;border:1px solid #555;font-size:15px}
-#info{color:#ffd27d}
+  body{margin:0;overflow:hidden;font-family:sans-serif;background:black;touch-action:none}
+  #damage{position:fixed;inset:0;pointer-events:none;z-index:10;box-shadow:inset 0 0 130px 70px rgba(255,0,0,.95);opacity:0;transition:opacity .25s}
+  #hud{position:fixed;top:8px;left:10px;right:10px;z-index:20;color:white;text-shadow:1px 1px 3px black;pointer-events:none}
+  .bar{height:16px;background:#222;border:2px solid white;border-radius:10px;overflow:hidden;margin-bottom:4px}
+  #myHealth{height:100%;width:100%;background:lime}
+  #enemyHealth{height:100%;width:100%;background:red}
+  #msg{position:fixed;top:88px;left:0;right:0;text-align:center;color:white;z-index:20;text-shadow:1px 1px 4px black;pointer-events:none;font-size:16px}
+  #startBtn{position:fixed;bottom:180px;left:50%;transform:translateX(-50%);padding:16px 32px;font-size:20px;border-radius:15px;border:none;background:#ffcc00;z-index:40;font-weight:bold}
+  /* CONTROLES TUYOS */
+  #controls{position:fixed;bottom:10px;left:0;right:0;z-index:30;display:flex;justify-content:space-between;padding:0 10px;gap:8px}
+  .pad{display:grid;grid-template-columns:repeat(3,58px);gap:6px}
+  .btn{width:58px;height:58px;border-radius:50%;border:2px solid white;background:rgba(255,255,255,.25);color:white;font-size:24px;display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none}
+  .btn:active{background:rgba(255,255,255,.7);color:black}
+  .punch{width:66px;height:66px;background:rgba(255,50,50,.7);font-size:13px;font-weight:bold;text-align:center;line-height:1.1}
+  .punch.blue{background:rgba(50,100,255,.8)}
+  .punch.yellow{background:rgba(255,200,0,.9);color:black}
 </style>
 </head>
 <body>
-<div id="menu">
-  <h2>Rival sin ARCore</h2>
-  <p>Funciona en cualquier Android.<br>Usa cámara + giroscopio, no necesita ARCore.</p>
-  <button id="empezar">Activar cámara y giroscopio</button>
-  <p id="info">1. Aceptá cámara y sensores de movimiento.<br>2. Apuntá a donde querés dejarlo.<br>3. Tocá "Fijar rival acá".<br>4. Girá y ya no lo ves. Volvé y reaparece.</p>
-</div>
 
-<div id="juego">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="lienzo"></canvas>
-  <div id="hud">Apuntá a donde querés dejarlo y tocá Fijar</div>
-  <div id="controles">
-    <button id="fijar">Fijar rival acá</button>
-    <button id="cerca">Acercar</button>
-    <button id="lejos">Alejar</button>
-    <button id="salir">Salir</button>
+<div id="damage"></div>
+<div id="hud">
+  <div>YO ❤️ <span id="myTxt">100</span></div><div class="bar"><div id="myHealth"></div></div>
+  <div>RIVAL IA 👹 <span id="enTxt">100</span> - <span id="stateTxt">esperando</span></div><div class="bar"><div id="enemyHealth"></div></div>
+</div>
+<div id="msg">Tocá EMPEZAR. Movéte con las flechas. Pegá con los botones rojos.</div>
+<button id="startBtn">▶ EMPEZAR PELEA</button>
+
+<div id="controls">
+  <div class="pad">
+    <div></div><div class="btn" id="btnF">⬆️</div><div></div>
+    <div class="btn" id="btnL">⬅️</div><div class="btn" id="btnB">⬇️</div><div class="btn" id="btnR">➡️</div>
+  </div>
+  <div class="pad">
+    <div class="btn punch" id="pJab">RECTO</div>
+    <div class="btn punch blue" id="pHook">GANCHO</div>
+    <div class="btn punch yellow" id="pUpper">UPPER</div>
   </div>
 </div>
 
+<a-scene>
+  <a-sky color="#87CEEB"></a-sky>
+  <a-plane position="0 0 0" rotation="-90 0 0" width="50" height="50" color="#7BC8A4"></a-plane>
+  <a-ring position="0 0.01 0" rotation="-90 0 0" radius-inner="2.8" radius-outer="3.1" color="white"></a-ring>
+  <a-ring position="0 0.01 0" rotation="-90 0 0" radius-inner="0.2" radius-outer="0.4" color="yellow"></a-ring>
+
+  <a-entity id="player" position="0 1.6 7">
+    <a-camera look-controls="pointerLockEnabled:false">
+      <a-cursor color="yellow"></a-cursor>
+    </a-camera>
+  </a-entity>
+
+  <!-- RIVAL IA -->
+  <a-entity id="enemy" position="0 1.25 -1">
+    <a-box position="0 0 0" width="1.05" height="1.5" depth="0.6" color="#c0392b" id="body"></a-box>
+    <a-box position="0 1.05 0" width="0.62" height="0.62" depth="0.62" color="#f1c27d" id="head"></a-box>
+    <a-box position="-0.15 1.1 0.32" width="0.12" height="0.12" depth="0.05" color="black"></a-box>
+    <a-box position="0.15 1.1 0.32" width="0.12" height="0.12" depth="0.05" color="black"></a-box>
+    <a-box id="armL" position="-0.7 0.2 0.2" width="0.28" height="1.05" depth="0.28" color="#c0392b"></a-box>
+    <a-box id="armR" position="0.7 0.2 0.2" width="0.28" height="1.05" depth="0.28" color="#c0392b"></a-box>
+    <a-box id="gloveL" position="-0.7 -0.3 0.2" width="0.35" height="0.35" depth="0.35" color="#111"></a-box>
+    <a-box id="gloveR" position="0.7 -0.3 0.2" width="0.35" height="0.35" depth="0.35" color="#111"></a-box>
+  </a-entity>
+</a-scene>
+
 <script>
-let yawActual=0, yawFijado=null, escala=1, golpeHasta=0;
-let stream=null;
-const video=document.getElementById('video');
-const canvas=document.getElementById('lienzo');
-const ctx=canvas.getContext('2d');
-const hud=document.getElementById('hud');
+let started=false, myHP=100, enemyHP=100;
+let keys={f:false,b:false,l:false,r:false};
+let lastEnemyAttack=0, enemyCooldownUntil=0, nextThink=0;
+let enemyMode="chase", strafeDir=1, strafeUntil=0;
+let playerVel={x:0,z:0};
 
-function ajustar(){
-  const dpr=Math.min(devicePixelRatio||1,2);
-  canvas.width=innerWidth*dpr; canvas.height=innerHeight*dpr;
-  canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px';
-  ctx.setTransform(dpr,0,0,dpr,0,0);
+const player=document.querySelector("#player");
+const enemy=document.querySelector("#enemy");
+const armL=document.querySelector("#armL");
+const armR=document.querySelector("#armR");
+const gloveL=document.querySelector("#gloveL");
+const gloveR=document.querySelector("#gloveR");
+const damageEl=document.querySelector("#damage");
+const msgEl=document.querySelector("#msg");
+
+function bindHold(id, key){
+  const el=document.getElementById(id);
+  const on=e=>{e.preventDefault(); keys[key]=true;};
+  const off=e=>{e.preventDefault(); keys[key]=false;};
+  el.addEventListener("touchstart",on,{passive:false});
+  el.addEventListener("touchend",off); el.addEventListener("touchcancel",off);
+  el.addEventListener("mousedown",on); el.addEventListener("mouseup",off); el.addEventListener("mouseleave",off);
 }
+bindHold("btnF","f"); bindHold("btnB","b"); bindHold("btnL","l"); bindHold("btnR","r");
 
-document.getElementById('empezar').onclick=async()=>{
-  try{
-    // Pedir permiso de sensores en iPhone, en Android no hace nada
-    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
-      await DeviceOrientationEvent.requestPermission();
-    }
-    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'}}});
-    video.srcObject=stream; await video.play();
-    document.getElementById('menu').style.display='none';
-    document.getElementById('juego').style.display='block';
-    ajustar(); addEventListener('resize',ajustar);
-    requestAnimationFrame(dibujar);
-  }catch(e){ document.getElementById('info').textContent='No se pudo: '+e.message; }
-};
-
-// Giroscopio: alpha = hacia donde apunta el celu
-addEventListener('deviceorientation',(e)=>{
-  if(e.alpha!=null) yawActual=e.alpha;
+document.querySelector("#startBtn").addEventListener("click",()=>{
+  started=true; document.querySelector("#startBtn").style.display="none";
+  msgEl.textContent="¡La IA te está cazando! Acercate con ⬆️ y pegale.";
 });
 
-document.getElementById('fijar').onclick=()=>{
-  yawFijado=yawActual;
-  hud.textContent='Rival fijado. Girá y desaparece. Volvé y reaparece.';
-};
-document.getElementById('cerca').onclick=()=>{escala=Math.min(1.8,escala+.15)};
-document.getElementById('lejos').onclick=()=>{escala=Math.max(.55,escala-.15)};
-document.getElementById('salir').onclick=()=>{ if(stream) stream.getTracks().forEach(t=>t.stop()); location.reload(); };
+// --- TU MOVIMIENTO CON BOTONES ---
+function movePlayer(dt){
+  if(!started) return;
+  let speed=3.2*dt; // metros por segundo, suave
+  let p=player.getAttribute("position");
+  let cam=document.querySelector("a-camera").getAttribute("rotation");
+  let rad=(cam.y||0)*Math.PI/180;
+  let fx=-Math.sin(rad), fz=-Math.cos(rad);
+  let rx=Math.cos(rad), rz=-Math.sin(rad);
+  let mx=0, mz=0;
+  if(keys.f){mx+=fx; mz+=fz;}
+  if(keys.b){mx-=fx; mz-=fz;}
+  if(keys.l){mx-=rx; mz-=rz;}
+  if(keys.r){mx+=rx; mz+=rz;}
+  let len=Math.hypot(mx,mz);
+  if(len>0){ mx/=len; mz/=len; p.x+=mx*speed; p.z+=mz*speed; }
+  // no salir del ring
+  p.x=Math.max(-9,Math.min(9,p.x)); p.z=Math.max(-9,Math.min(9,p.z));
+  player.setAttribute("position",p);
+  playerVel={x:mx*speed/dt||0, z:mz*speed/dt||0};
+}
 
-function diffAng(a,b){ let d=a-b; while(d>180)d-=360; while(d<-180)d+=360; return d; }
+// --- TUS GOLPES ---
+function myPunch(type){
+  if(!started || enemyHP<=0) return;
+  let p=player.getAttribute("position"), e=enemy.getAttribute("position");
+  let dist=Math.hypot(p.x-e.x, p.z-e.z);
+  if(dist>2.3){ msgEl.textContent="Estás lejos. Acercate con ⬆️ para pegar."; return; }
+  let dmg= type==="jab"?8 : type==="hook"?13 : 18;
+  enemyHP=Math.max(0,enemyHP-dmg);
+  document.querySelector("#enemyHealth").style.width=enemyHP+"%";
+  document.querySelector("#enTxt").textContent=enemyHP;
+  msgEl.textContent = type==="jab"?"¡RECTO! -"+dmg : type==="hook"?"¡GANCHO! -"+dmg : "¡UPPERCUT! -"+dmg;
+  // empuje + flash
+  let dx=e.x-p.x, dz=e.z-p.z, l=Math.hypot(dx,dz)||1;
+  enemy.setAttribute("position",{x:e.x+dx/l*0.35, y:e.y, z:e.z+dz/l*0.35});
+  document.querySelector("#body").setAttribute("color","white");
+  setTimeout(()=>document.querySelector("#body").setAttribute("color","#c0392b"),130);
+  if(enemyHP<=0){ msgEl.textContent="🏆 ¡GANASTE! Recargá para revancha."; enemy.setAttribute("visible","false"); }
+}
+document.querySelector("#pJab").addEventListener("click",()=>myPunch("jab"));
+document.querySelector("#pHook").addEventListener("click",()=>myPunch("hook"));
+document.querySelector("#pUpper").addEventListener("click",()=>myPunch("upper"));
 
-function dibujar(ms){
-  const w=innerWidth,h=innerHeight;
-  ctx.clearRect(0,0,w,h);
-  if(yawFijado==null){
-    // Si todavía no fijaste, mostralo en el centro como guía
-    dibujarRival(w/2,h*0.84,escala,ms);
-  }else{
-    const diff=diffAng(yawFijado,yawActual);
-    // Si giraste más de 45 grados, no lo ves
-    if(Math.abs(diff)<45){
-      // Lo movemos en X según cuánto giraste
-      const x=w/2 + (diff/45)*(w*0.4);
-      dibujarRival(x,h*0.84,escala,ms);
-      hud.textContent='Rival acá. Girá para que desaparezca.';
-    }else{
-      hud.textContent='Giraste, el rival quedó atrás tuyo. Volvé a mirar.';
+function showRed(){
+  damageEl.style.opacity="1";
+  setTimeout(()=>damageEl.style.opacity="0.65",400);
+  setTimeout(()=>damageEl.style.opacity="0",1400);
+}
+
+// --- ANIMACION DE GOLPE DEL RIVAL ---
+function enemyPunchAnim(type){
+  // resetea brazos
+  armL.setAttribute("position","-0.7 0.2 0.2"); armR.setAttribute("position","0.7 0.2 0.2");
+  armL.setAttribute("rotation","0 0 0"); armR.setAttribute("rotation","0 0 0");
+  let t=0;
+  let id=setInterval(()=>{
+    t+=30;
+    if(type==="jab"){
+      armR.setAttribute("position",`0.3 0.2 ${0.2+t*0.015}`);
+    } else if(type==="hookL"){
+      armL.setAttribute("rotation",`0 ${-t*0.8} 0`); armL.setAttribute("position",`-0.7 0.2 ${0.2+t*0.01}`);
+    } else if(type==="hookR"){
+      armR.setAttribute("rotation",`0 ${t*0.8} 0`); armR.setAttribute("position",`0.7 0.2 ${0.2+t*0.01}`);
+    } else if(type==="upper"){
+      armL.setAttribute("position",`-0.3 ${-0.2+t*0.012} ${0.2+t*0.012}`); armL.setAttribute("rotation",`${-t*0.5} 0 0`);
     }
-  }
-  requestAnimationFrame(dibujar);
+    if(t>220){ clearInterval(id); armL.setAttribute("position","-0.7 0.2 0.2"); armR.setAttribute("position","0.7 0.2 0.2"); armL.setAttribute("rotation","0 0 0"); armR.setAttribute("rotation","0 0 0"); }
+  },30);
 }
 
-function dibujarRival(cx,base,escala,ms){
-  const s=Math.min(innerWidth,innerHeight)*0.31*escala;
-  const golpe=ms<golpeHasta;
-  ctx.save(); ctx.translate(cx,base); ctx.scale(s/220,s/220);
-  ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0,0,95,18,0,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#202b3b'; ctx.lineWidth=34; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(-27,-100); ctx.lineTo(-42,-14); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(27,-100); ctx.lineTo(42,-14); ctx.stroke();
-  ctx.fillStyle='#30445e'; ctx.beginPath(); ctx.roundRect(-55,-250,110,155,26); ctx.fill();
-  ctx.fillStyle='#bd8060'; ctx.beginPath(); ctx.ellipse(0,-286,38,43,0,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#171d26'; ctx.beginPath(); ctx.ellipse(0,-316,40,17,0,Math.PI,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#bd8060'; ctx.lineWidth=25;
-  ctx.beginPath(); ctx.moveTo(-52,-225); ctx.lineTo(golpe?-105:-88,-165); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(52,-225); ctx.lineTo(golpe?105:88,-165); ctx.stroke();
-  ctx.fillStyle='#df3448';
-  ctx.beginPath(); ctx.arc(golpe?-112:-90,-150,25,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(golpe?112:90,-150,25,0,Math.PI*2); ctx.fill();
-  ctx.restore();
-}
+// --- IA DEL RIVAL ---
+let lastTime=performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  let dt=Math.min(0.05,(now-lastTime)/1000); lastTime=now;
+  if(!started || enemyHP<=0 || myHP<=0) return;
+  movePlayer(dt);
 
-canvas.addEventListener('pointerdown',(e)=>{
-  if(yawFijado==null) return;
-  const r=canvas.getBoundingClientRect();
-  const x=e.clientX-r.left, y=e.clientY-r.top;
-  const diff=diffAng(yawFijado,yawActual);
-  const cx=innerWidth/2 + (diff/45)*(innerWidth*0.4);
-  const cy=innerHeight*0.48;
-  const radio=Math.min(innerWidth,innerHeight)*0.34*escala;
-  if(Math.hypot(x-cx,y-cy)<radio){
-    golpeHasta=performance.now()+260;
-    hud.textContent='¡Le pegaste!';
-    if(navigator.vibrate) navigator.vibrate(60);
+  let p=player.getAttribute("position");
+  let e=enemy.getAttribute("position");
+  let dx=p.x-e.x, dz=p.z-e.z;
+  let dist=Math.hypot(dx,dz);
+  if(dist<0.001) dist=0.001;
+
+  // mira siempre hacia vos, suave, sin tembleque
+  let targetRot=Math.atan2(dx,dz)*180/Math.PI;
+  let curRot=enemy.getAttribute("rotation").y||0;
+  let diff=((targetRot-curRot+540)%360)-180;
+  enemy.setAttribute("rotation",{x:0,y:curRot+diff*Math.min(1,dt*8),z:0});
+
+  // IA decide cada 500ms
+  if(now>nextThink){
+    nextThink=now+500;
+    if(dist>2.2) enemyMode="chase";
+    else if(dist>1.4) enemyMode="circle"; // baila para buscar hueco
+    else enemyMode="attack";
+    strafeDir=Math.random()<0.5?-1:1;
+    strafeUntil=now+600+Math.random()*600;
+    document.querySelector("#stateTxt").textContent = enemyMode==="chase"?"te persigue" : enemyMode==="circle"?"buscando hueco" : "atacando";
   }
-});
+
+  // MOVIMIENTO SUAVE CON DELTA TIME - acá estaba el bug del tembleque
+  let speed=0;
+  let mx=0, mz=0;
+  if(enemyMode==="chase"){
+    // ACORTA DISTANCIA - velocidad 1.6 m/s, no corre más rápido que vos
+    speed=1.7;
+    mx=dx/dist; mz=dz/dist;
+  } else if(enemyMode==="circle"){
+    // se mueve de costado + un poco hacia vos
+    let px=-dz/dist*strafeDir, pz=dx/dist*strafeDir;
+    mx=px*0.8+dx/dist*0.4; mz=pz*0.8+dz/dist*0.4;
+    speed=1.2;
+    if(now>strafeUntil) strafeDir*=-1;
+  } else if(enemyMode==="attack"){
+    speed=0.4;
+    mx=dx/dist*0.3; mz=dz/dist*0.3;
+  }
+  // si está muy cerca, no se mete dentro tuyo
+  if(dist<1.1){ mx=0; mz=0; speed=0; }
+
+  e.x+=mx*speed*dt; e.z+=mz*speed*dt;
+  e.x=Math.max(-9,Math.min(9,e.x)); e.z=Math.max(-9,Math.min(9,e.z));
+  // caminar: sube y baja suave
+  let walkBob = speed>0.5 ? Math.sin(now*0.012)*0.04 : 0;
+  enemy.setAttribute("position",{x:e.x, y:1.25+walkBob, z:e.z});
+
+  // ATACA SOLO SI ESTÁ A RANGO Y PASÓ EL COOLDOWN
+  if(dist<1.9 && now>enemyCooldownUntil && now-lastEnemyAttack>1800){
+    lastEnemyAttack=now;
+    enemyCooldownUntil=now+400; // no pega 2 veces seguidas
+    let moves=["jab","hookL","hookR","upper"];
+    let move=moves[Math.floor(Math.random()*moves.length)];
+    enemyPunchAnim(move);
+    // el golpe llega 250ms después de la animación
+    setTimeout(()=>{
+      let pp=player.getAttribute("position");
+      let ee=enemy.getAttribute("position");
+      let d2=Math.hypot(pp.x-ee.x, pp.z-ee.z);
+      if(d2<2.4){ // si todavía estás cerca, te pega
+        let dmg= move==="jab"?7 : move==="upper"?18 : 12;
+        myHP=Math.max(0,myHP-dmg);
+        document.querySelector("#myHealth").style.width=myHP+"%";
+        document.querySelector("#myTxt").textContent=myHP;
+        showRed();
+        msgEl.textContent = move==="jab"?"Te metió un RECTO -"+dmg : move==="upper"?"Te metió un UPPERCUT -"+dmg+" !" : "Te metió un GANCHO -"+dmg;
+        if(myHP<=0) msgEl.textContent="💀 TE GANÓ LA IA. Recargá para revancha.";
+      } else {
+        msgEl.textContent="Esquivaste el golpe! Bien ahí.";
+      }
+    },250);
+  }
+}
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
