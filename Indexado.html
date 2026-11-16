@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Rival sin ARCore - Giroscopio</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:Arial,sans-serif}
+#menu{position:fixed;inset:0;z-index:10;background:#10141c;padding:20px;text-align:center;overflow:auto}
+button{padding:14px 18px;border:0;border-radius:10px;background:#d93248;color:#fff;font-size:17px;margin:6px}
+#juego{display:none;position:fixed;inset:0;background:#000}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#lienzo{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+#hud{position:absolute;z-index:3;top:12px;left:0;right:0;text-align:center;text-shadow:0 2px 6px #000;pointer-events:none}
+#controles{position:absolute;z-index:4;left:0;right:0;bottom:16px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+#controles button{background:#222;border:1px solid #555;font-size:15px}
+#info{color:#ffd27d}
+</style>
+</head>
+<body>
+<div id="menu">
+  <h2>Rival sin ARCore</h2>
+  <p>Funciona en cualquier Android.<br>Usa cámara + giroscopio, no necesita ARCore.</p>
+  <button id="empezar">Activar cámara y giroscopio</button>
+  <p id="info">1. Aceptá cámara y sensores de movimiento.<br>2. Apuntá a donde querés dejarlo.<br>3. Tocá "Fijar rival acá".<br>4. Girá y ya no lo ves. Volvé y reaparece.</p>
+</div>
+
+<div id="juego">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="lienzo"></canvas>
+  <div id="hud">Apuntá a donde querés dejarlo y tocá Fijar</div>
+  <div id="controles">
+    <button id="fijar">Fijar rival acá</button>
+    <button id="cerca">Acercar</button>
+    <button id="lejos">Alejar</button>
+    <button id="salir">Salir</button>
+  </div>
+</div>
+
+<script>
+let yawActual=0, yawFijado=null, escala=1, golpeHasta=0;
+let stream=null;
+const video=document.getElementById('video');
+const canvas=document.getElementById('lienzo');
+const ctx=canvas.getContext('2d');
+const hud=document.getElementById('hud');
+
+function ajustar(){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  canvas.width=innerWidth*dpr; canvas.height=innerHeight*dpr;
+  canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+document.getElementById('empezar').onclick=async()=>{
+  try{
+    // Pedir permiso de sensores en iPhone, en Android no hace nada
+    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+      await DeviceOrientationEvent.requestPermission();
+    }
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'}}});
+    video.srcObject=stream; await video.play();
+    document.getElementById('menu').style.display='none';
+    document.getElementById('juego').style.display='block';
+    ajustar(); addEventListener('resize',ajustar);
+    requestAnimationFrame(dibujar);
+  }catch(e){ document.getElementById('info').textContent='No se pudo: '+e.message; }
+};
+
+// Giroscopio: alpha = hacia donde apunta el celu
+addEventListener('deviceorientation',(e)=>{
+  if(e.alpha!=null) yawActual=e.alpha;
+});
+
+document.getElementById('fijar').onclick=()=>{
+  yawFijado=yawActual;
+  hud.textContent='Rival fijado. Girá y desaparece. Volvé y reaparece.';
+};
+document.getElementById('cerca').onclick=()=>{escala=Math.min(1.8,escala+.15)};
+document.getElementById('lejos').onclick=()=>{escala=Math.max(.55,escala-.15)};
+document.getElementById('salir').onclick=()=>{ if(stream) stream.getTracks().forEach(t=>t.stop()); location.reload(); };
+
+function diffAng(a,b){ let d=a-b; while(d>180)d-=360; while(d<-180)d+=360; return d; }
+
+function dibujar(ms){
+  const w=innerWidth,h=innerHeight;
+  ctx.clearRect(0,0,w,h);
+  if(yawFijado==null){
+    // Si todavía no fijaste, mostralo en el centro como guía
+    dibujarRival(w/2,h*0.84,escala,ms);
+  }else{
+    const diff=diffAng(yawFijado,yawActual);
+    // Si giraste más de 45 grados, no lo ves
+    if(Math.abs(diff)<45){
+      // Lo movemos en X según cuánto giraste
+      const x=w/2 + (diff/45)*(w*0.4);
+      dibujarRival(x,h*0.84,escala,ms);
+      hud.textContent='Rival acá. Girá para que desaparezca.';
+    }else{
+      hud.textContent='Giraste, el rival quedó atrás tuyo. Volvé a mirar.';
+    }
+  }
+  requestAnimationFrame(dibujar);
+}
+
+function dibujarRival(cx,base,escala,ms){
+  const s=Math.min(innerWidth,innerHeight)*0.31*escala;
+  const golpe=ms<golpeHasta;
+  ctx.save(); ctx.translate(cx,base); ctx.scale(s/220,s/220);
+  ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0,0,95,18,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#202b3b'; ctx.lineWidth=34; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-27,-100); ctx.lineTo(-42,-14); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(27,-100); ctx.lineTo(42,-14); ctx.stroke();
+  ctx.fillStyle='#30445e'; ctx.beginPath(); ctx.roundRect(-55,-250,110,155,26); ctx.fill();
+  ctx.fillStyle='#bd8060'; ctx.beginPath(); ctx.ellipse(0,-286,38,43,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#171d26'; ctx.beginPath(); ctx.ellipse(0,-316,40,17,0,Math.PI,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#bd8060'; ctx.lineWidth=25;
+  ctx.beginPath(); ctx.moveTo(-52,-225); ctx.lineTo(golpe?-105:-88,-165); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(52,-225); ctx.lineTo(golpe?105:88,-165); ctx.stroke();
+  ctx.fillStyle='#df3448';
+  ctx.beginPath(); ctx.arc(golpe?-112:-90,-150,25,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(golpe?112:90,-150,25,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+canvas.addEventListener('pointerdown',(e)=>{
+  if(yawFijado==null) return;
+  const r=canvas.getBoundingClientRect();
+  const x=e.clientX-r.left, y=e.clientY-r.top;
+  const diff=diffAng(yawFijado,yawActual);
+  const cx=innerWidth/2 + (diff/45)*(innerWidth*0.4);
+  const cy=innerHeight*0.48;
+  const radio=Math.min(innerWidth,innerHeight)*0.34*escala;
+  if(Math.hypot(x-cx,y-cy)<radio){
+    golpeHasta=performance.now()+260;
+    hud.textContent='¡Le pegaste!';
+    if(navigator.vibrate) navigator.vibrate(60);
+  }
+});
+</script>
+</body>
+</html>
