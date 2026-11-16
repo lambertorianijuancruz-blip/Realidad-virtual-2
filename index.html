@@ -8,6 +8,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <style>
   body{margin:0;overflow:hidden;background:black;font-family:sans-serif}
+  /* CÁMARA A PANTALLA COMPLETA - VES TU PUÑO REAL */
+  #camPreview{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+  /* La escena VR transparente para que se vea la cámara atrás */
+  a-scene{position:fixed;inset:0;z-index:2;background:transparent !important}
   #damage{position:fixed;inset:0;pointer-events:none;z-index:10;box-shadow:inset 0 0 130px 70px rgba(255,0,0,.95);opacity:0;transition:opacity .25s}
   #hud{position:fixed;top:8px;left:10px;right:10px;z-index:20;color:white;text-shadow:1px 1px 3px black;pointer-events:none}
   .bar{height:16px;background:#222;border:2px solid white;border-radius:10px;overflow:hidden;margin-bottom:4px}
@@ -16,27 +20,26 @@
   #msg{position:fixed;top:90px;left:0;right:0;text-align:center;color:white;z-index:20;text-shadow:1px 1px 4px black;font-size:18px}
   #startBtn{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:18px 34px;font-size:22px;border-radius:15px;border:none;background:#ffcc00;z-index:40;font-weight:bold}
   #perm{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 20px;background:white;border-radius:12px;z-index:40;font-weight:bold}
-  #camPreview{position:fixed;bottom:10px;right:10px;width:110px;height:80px;border:2px solid white;border-radius:10px;z-index:15;opacity:.7}
-  #handDot{position:fixed;left:50%;top:50%;width:30px;height:30px;border-radius:50%;background:lime;z-index:25;transform:translate(-50%,-50%);border:3px solid white;display:none}
+  #handDot{position:fixed;left:50%;top:50%;width:50px;height:50px;border-radius:50%;background:rgba(0,255,0,.35);z-index:25;transform:translate(-50%,-50%);border:4px solid lime;display:none;pointer-events:none}
   #stepInfo{position:fixed;bottom:10px;left:10px;color:white;z-index:20;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:10px;font-size:14px}
+  #fistLabel{position:fixed;left:50%;top:62%;transform:translateX(-50%);color:lime;z-index:26;font-weight:bold;text-shadow:1px 1px 3px black;display:none;font-size:18px}
 </style>
 </head>
 <body>
+<video id="camPreview" autoplay playsinline muted></video>
 <div id="damage"></div>
 <div id="hud">
   <div>YO ❤️ <span id="myTxt">100</span></div><div class="bar"><div id="myHealth"></div></div>
   <div>RIVAL IA 👹 <span id="enTxt">100</span> - <span id="stateTxt">esperando</span></div><div class="bar"><div id="enemyHealth"></div></div>
 </div>
-<div id="msg">1- Tocá PERMITIR<br>2- Tiene que prender la cámara de ATRÁS<br>3- Tocá EMPEZAR</div>
+<div id="msg">1- Tocá PERMITIR<br>2- Vas a ver tu puño real en pantalla<br>3- Tocá EMPEZAR</div>
 <button id="startBtn">▶ EMPEZAR PELEA</button>
 <button id="perm">📷 PERMITIR CÁMARA DE ATRÁS</button>
-<video id="camPreview" autoplay playsinline muted></video>
 <div id="handDot"></div>
+<div id="fistLabel">👊 TU PUÑO</div>
 <div id="stepInfo">Pasos: 0 | Mano: no detectada</div>
-<a-scene>
-  <a-sky color="#87CEEB"></a-sky>
-  <a-plane position="0 0 0" rotation="-90 0 0" width="50" height="50" color="#7BC8A4"></a-plane>
-  <a-ring position="0 0.01 0" rotation="-90 0 0" radius-inner="2.8" radius-outer="3.1" color="white"></a-ring>
+<a-scene embedded renderer="alpha:true" vr-mode-ui="enabled:false">
+  <!-- Sin cielo, para que se vea tu cámara -->
   <a-entity id="player" position="0 1.6 7"><a-camera look-controls="pointerLockEnabled:false"><a-cursor color="yellow"></a-cursor></a-camera></a-entity>
   <a-entity id="enemy" position="0 1.25 -1">
     <a-box position="0 0 0" width="1.05" height="1.5" depth="0.6" color="#c0392b" id="body"></a-box>
@@ -53,14 +56,14 @@ let lastEnemyAttack=0, enemyCooldownUntil=0, nextThink=0, enemyMode="chase", str
 let lastStepTime=0, lastAccel=0, handHistory=[], lastPunchTime=0;
 const player=document.querySelector("#player"), enemy=document.querySelector("#enemy");
 const damageEl=document.querySelector("#damage"), msgEl=document.querySelector("#msg");
-const stepInfo=document.querySelector("#stepInfo"), handDot=document.querySelector("#handDot");
+const stepInfo=document.querySelector("#stepInfo"), handDot=document.querySelector("#handDot"), fistLabel=document.querySelector("#fistLabel");
 document.querySelector("#perm").addEventListener("click", async ()=>{
   if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){ try{ await DeviceMotionEvent.requestPermission(); }catch(e){} }
   startHandTracking();
   document.querySelector("#perm").style.display="none";
-  msgEl.textContent="Iniciando cámara de ATRÁS...";
+  msgEl.textContent="Cámara de ATRÁS a pantalla completa...";
 });
-document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; msgEl.textContent="¡Caminá para moverte! Tirá golpes con tus manos."; });
+document.querySelector("#startBtn").addEventListener("click",()=>{ started=true; document.querySelector("#startBtn").style.display="none"; msgEl.textContent="¡Mirá tu puño real! Pegale al rival."; });
 window.addEventListener("devicemotion", (e)=>{
   if(!started) return; let acc=e.accelerationIncludingGravity; if(!acc) return;
   let total=Math.sqrt(acc.x*acc.x+acc.y*acc.y+acc.z*acc.z); let now=Date.now();
@@ -77,9 +80,12 @@ async function startHandTracking(){
   const hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
   hands.setOptions({maxNumHands:1, modelComplexity:0, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
   hands.onResults((res)=>{
-    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ handDot.style.display="none"; handHistory=[]; return; }
+    if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){ handDot.style.display="none"; fistLabel.style.display="none"; handHistory=[]; return; }
     let lm=res.multiHandLandmarks[0]; let wrist=lm[0]; let now=Date.now();
-    handDot.style.display="block"; handDot.style.left=(wrist.x*100)+"%"; handDot.style.top=(wrist.y*100)+"%";
+    // EL PUNTO VERDE SIGUE A TU PUÑO REAL
+    handDot.style.display="block"; fistLabel.style.display="block";
+    handDot.style.left=(wrist.x*100)+"%"; handDot.style.top=(wrist.y*100)+"%";
+    fistLabel.style.left=(wrist.x*100)+"%"; fistLabel.style.top=(wrist.y*100+8)+"%";
     handHistory.push({x:wrist.x, y:wrist.y, t:now});
     if(handHistory.length>8) handHistory.shift();
     if(handHistory.length>=4){
@@ -94,22 +100,19 @@ async function startHandTracking(){
     }
   });
   try{
-    // CÁMARA DE ATRÁS OBLIGATORIA
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
-    video.srcObject = stream;
-    await video.play();
-    msgEl.textContent="Cámara de ATRÁS prendida. Tocá EMPEZAR.";
+    video.srcObject = stream; await video.play();
+    msgEl.textContent="Listo, ves tu mano real. Tocá EMPEZAR.";
     async function loopSend(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loopSend); }
     loopSend();
   }catch(e){
-    // Si tu celu no deja poner exact, probamos sin exact
     try{
       const stream2 = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       video.srcObject = stream2; await video.play();
-      msgEl.textContent="Cámara de ATRÁS prendida. Tocá EMPEZAR.";
+      msgEl.textContent="Listo, ves tu mano real. Tocá EMPEZAR.";
       async function loop2(){ if(video.readyState>=2){ await hands.send({image: video}); } requestAnimationFrame(loop2); }
       loop2();
-    }catch(e2){ msgEl.textContent="No pude prender la cámara de atrás. Error: "+e2.message; }
+    }catch(e2){ msgEl.textContent="No pude prender la cámara de atrás: "+e2.message; }
   }
 }
 function doMyPunch(type){
